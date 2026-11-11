@@ -49,11 +49,8 @@
     a.download = "sounddrop-" + role + "-" + stamp() + ".txt";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    $("logMsg").textContent = "Saved " + a.download + ". If nothing downloaded, use Copy log.";
+    $("logMsg").textContent = "Saved " + a.download + ". If nothing downloaded, try again in Chrome.";
   };
-  $("copyLog").onclick = () => navigator.clipboard.writeText(buildLog())
-    .then(() => { $("logMsg").textContent = "Log copied. Paste it into a .txt file or straight into the chat."; })
-    .catch(() => { $("logMsg").textContent = "Copy was blocked by the browser. Use Save log instead."; });
   $("clearLog").onclick = () => { logLines = []; $("logCount").textContent = "0"; $("logMsg").textContent = "Log cleared."; };
 
   // ---------- tabs ----------
@@ -142,7 +139,7 @@
   };
 
   // ---------- receiver ----------
-  let micSource = null, stream = null, rx = null, wake = null, micSettings = null, inboxCount = 0, starting = false;
+  let micSource = null, stream = null, rx = null, micSettings = null, inboxCount = 0, starting = false;
   function getLoopIn() {
     const c = audio();
     if (!loopIn) loopIn = c.createGain();
@@ -195,7 +192,6 @@
       source = micSource;
     }
     $("lvRate").textContent = Math.round(c.sampleRate / 1000) + " kHz";
-    try { wake = await navigator.wakeLock.request("screen"); } catch (e) { wake = null; }
     let lastLevel = 0;
     rx = await SD.createReceiver(c, source, {
       onState(s, m) {
@@ -217,7 +213,6 @@
         $("hero").className = "hero fresh"; $("heroMsg").textContent = text;
         $("heroSub").textContent = SD.MODES[info.mode].label + " mode · " + info.bytes + " bytes · " + (info.ms / 1000).toFixed(1) + " s · signal " + info.avgSnr.toFixed(0) + " dB";
         addInbox(text, info);
-        if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
       },
       onError(msg, info) {
         log("RX_FAIL", info && info.mode, msg, info && info.nibbles != null ? info.nibbles + " symbols" : "", info && info.avgSnr != null ? "snr " + info.avgSnr.toFixed(1) : "");
@@ -225,7 +220,7 @@
         $("hero").className = "hero failed"; $("heroMsg").textContent = "Message not received";
         $("heroSub").textContent = msg + " Ask the sender to try again, a little closer or louder.";
       }
-    }, { engine: params.get("engine") || "worklet", cfg: params.has("echoDb") ? { echoDb: +params.get("echoDb") } : null });
+    }, { engine: params.get("engine") || "worklet", fftN: params.has("fftN") ? +params.get("fftN") : null, cfg: params.has("echoDb") ? { echoDb: +params.get("echoDb") } : null });
     rx.start();
     log("LISTEN_START", "rate " + c.sampleRate, "engine " + rx.engine, LOOPBACK ? "loopback" : JSON.stringify(micSettings || {}));
     $("listenBtn").textContent = "Stop listening";
@@ -235,7 +230,6 @@
     if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null;
     if (micSource) try { micSource.disconnect(); } catch (e) {}
     micSource = null;
-    if (wake) { wake.release().catch(() => {}); wake = null; }
     setStatus("off", "Not listening"); $("listenBtn").textContent = "Start listening";
     log("LISTEN_STOP");
   }

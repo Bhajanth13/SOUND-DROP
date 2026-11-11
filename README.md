@@ -20,7 +20,7 @@ Each device keeps a test log of everything sent and received. Use **Save log (.t
 
 `lab.html` is the Tone Lab, which checks which high frequencies a given speaker and microphone can handle.
 
-## How it works (prototype v0.2)
+## How it works (prototype v0.3)
 
 | Part | Detail |
 |---|---|
@@ -30,7 +30,7 @@ Each device keeps a test log of everything sent and received. Use **Save log (.t
 | Symbol length | 100 ms (Normal) or 60 ms (Fast) |
 | Frame | START, length byte, UTF-8 payload (up to 120 bytes), CRC-8, END |
 | Sender | Web Audio API, one phase-continuous oscillator (no clicks) |
-| Receiver | Microphone into an AudioWorklet: Hann-windowed Goertzel filters at every tone, analysed every 5 ms on the audio thread (falls back to an AnalyserNode where AudioWorklet is missing) |
+| Receiver | Microphone into an AudioWorklet: Web Audio AudioWorklet running a 1024-point FFT every 5 ms on the audio thread (falls back to the Web Audio AnalyserNode FFT where AudioWorklet is missing) |
 | Echo handling | The tone still ringing in the room is ignored; a new symbol must stand out from the other tones and beat the ringing tone by 3 dB |
 
 A repeated nibble is sent as the REPEAT tone, so two neighbouring symbols are never the same tone.
@@ -48,4 +48,4 @@ The receiver detects both modes automatically.
 
 `index.html?loopback&mute` routes the sender straight into the receiver inside one page, without
 speakers or a microphone, for checking the encoder and decoder.
-Add `&reverb=0.5&wet=2` to simulate room echo, or `&engine=analyser` to force the fallback receiver.
+Add `&reverb=0.5&wet=2` to simulate room echo, `&engine=analyser` to force the fallback receiver, or `&fftN=2048` to change the FFT size.

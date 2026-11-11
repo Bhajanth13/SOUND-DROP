@@ -14,10 +14,11 @@
  * Frame: START | length byte | payload bytes (UTF-8) | CRC-8 | END
  * Each byte is sent as two nibbles, high nibble first.
  *
- * Receiver (v0.2):
- *   - Listening runs on the audio thread (AudioWorklet + Goertzel filters), so
- *     slow phone timers cannot make it miss short symbols. Browsers without
- *     AudioWorklet fall back to an AnalyserNode polled from the page.
+ * Receiver (v0.3):
+ *   - Listening runs on the audio thread (Web Audio AudioWorklet running a
+ *     1024-point FFT every 5 ms), so slow phone timers cannot make it miss
+ *     short symbols. Browsers without AudioWorklet fall back to the Web Audio
+ *     AnalyserNode (also an FFT) polled from the page.
  *   - Echo-aware: the tone currently playing keeps ringing in the room after
  *     the sender moves on. A new symbol only has to stand out from the other
  *     tones and be about as loud as that ringing tone, not beat it outright.
@@ -169,33 +170,56 @@
 
   const DETECTOR_CFG = { snrMin: 12, marginMin: 6, echoDb: -3, stableFrames: 3, startMs: 70, lostMs: 1200 };
 
-  // AudioWorklet processor source: Hann-windowed Goertzel filters at every tone
-  // frequency, analysed every 5 ms on the audio thread.
+  // AudioWorklet processor source: a Hann-windowed 1024-point FFT (radix-2,
+  // in place) every 5 ms on the audio thread; each tone's level is read from
+  // its nearest FFT bins, the same way the AnalyserNode fallback does it.
   const WORKLET_SRC = `
     const makeDetector = ${makeDetector.toString()};
     class SoundDropDetector extends AudioWorkletProcessor {
       constructor(o) {
         super();
-        const p = o.processorOptions;
-        this.N = p.N; this.hop = p.hop;
-        this.buf = new Float32Array(this.N); this.frame = new Float32Array(this.N);
+        const p = o.processorOptions, N = p.N;
+        this.N = N; this.hop = p.hop;
+        this.buf = new Float32Array(N); this.re = new Float32Array(N); this.im = new Float32Array(N);
         this.pos = 0; this.filled = 0; this.since = 0;
-        this.win = new Float32Array(this.N);
-        for (let i = 0; i < this.N; i++) this.win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (this.N - 1));
-        this.modes = p.modes.map(m => ({ id: m.id, coeff: m.freqs.map(f => 2 * Math.cos(2 * Math.PI * f / sampleRate)) }));
+        this.win = new Float32Array(N);
+        for (let i = 0; i < N; i++) this.win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));
+        // bit-reversal table and twiddle factors
+        const bits = Math.log2(N);
+        this.rev = new Uint16Array(N);
+        for (let i = 0; i < N; i++) { let r = 0; for (let b = 0; b < bits; b++) r |= ((i >> b) & 1) << (bits - 1 - b); this.rev[i] = r; }
+        this.cos = new Float32Array(N / 2); this.sin = new Float32Array(N / 2);
+        for (let i = 0; i < N / 2; i++) { this.cos[i] = Math.cos(2 * Math.PI * i / N); this.sin[i] = -Math.sin(2 * Math.PI * i / N); }
+        const binHz = sampleRate / N;
+        // read only the bins that belong to each tone: tones 2 bins apart get 1 bin, 3+ apart get 3
+        this.modes = p.modes.map(m => ({ id: m.id, r: Math.max(0, Math.floor((m.step / binHz - 1) / 2)), bins: m.freqs.map(f => Math.round(f / binHz)) }));
         this.det = makeDetector(p.cfg);
         this.port.onmessage = (e) => { if (e.data === "reset") this.det.reset(); };
       }
+      fft() {
+        const N = this.N, re = this.re, im = this.im, cs = this.cos, sn = this.sin;
+        for (let size = 2; size <= N; size <<= 1) {
+          const half = size >> 1, step = N / size;
+          for (let start = 0; start < N; start += size) {
+            for (let k = 0; k < half; k++) {
+              const wr = cs[k * step], wi = sn[k * step], a = start + k, b = a + half;
+              const tr = re[b] * wr - im[b] * wi, ti = re[b] * wi + im[b] * wr;
+              re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+            }
+          }
+        }
+      }
       analyze() {
-        const N = this.N, fr = this.frame, buf = this.buf, win = this.win;
-        for (let i = 0, j = this.pos; i < N; i++, j = (j + 1) % N) fr[i] = buf[j] * win[i];
+        const N = this.N, re = this.re, im = this.im, buf = this.buf, win = this.win, rev = this.rev;
+        for (let i = 0, j = this.pos; i < N; i++, j = (j + 1) % N) { re[rev[i]] = buf[j] * win[i]; im[rev[i]] = 0; }
+        this.fft();
         const levels = {};
         for (const m of this.modes) {
-          const L = new Array(m.coeff.length);
-          for (let k = 0; k < m.coeff.length; k++) {
-            const c = m.coeff[k]; let s1 = 0, s2 = 0;
-            for (let i = 0; i < N; i++) { const s0 = fr[i] + c * s1 - s2; s2 = s1; s1 = s0; }
-            L[k] = 10 * Math.log10(s1 * s1 + s2 * s2 - c * s1 * s2 + 1e-20);
+          const L = new Array(m.bins.length);
+          for (let k = 0; k < m.bins.length; k++) {
+            let v = 0;
+            for (let c = m.bins[k] - m.r; c <= m.bins[k] + m.r; c++) { const pw = re[c] * re[c] + im[c] * im[c]; if (pw > v) v = pw; }
+            L[k] = 10 * Math.log10(v + 1e-20);
           }
           levels[m.id] = L;
         }
@@ -270,14 +294,14 @@
         const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: "application/javascript" }));
         await ctx.audioWorklet.addModule(url);
         URL.revokeObjectURL(url);
-        const N = Math.round(1024 * ctx.sampleRate / 48000), hop = Math.round(ctx.sampleRate * 0.005);
+        const N = (opts && opts.fftN) || 1024, hop = Math.round(ctx.sampleRate * 0.005);
         let node = null, sink = null;
         return {
           engine: "worklet",
           start() {
             node = new AudioWorkletNode(ctx, "sounddrop-detector", {
               numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
-              processorOptions: { N, hop, cfg: CFG, modes: modeList.map((m) => ({ id: m.id, freqs: Array.from({ length: NUM_TONES }, (_, i) => toneHz(m, i)) })) }
+              processorOptions: { N, hop, cfg: CFG, modes: modeList.map((m) => ({ id: m.id, step: m.step, freqs: Array.from({ length: NUM_TONES }, (_, i) => toneHz(m, i)) })) }
             });
             node.port.onmessage = (ev) => onEvent(ev.data);
             sink = ctx.createGain(); sink.gain.value = 0;      // keeps the node running, outputs silence
@@ -305,8 +329,8 @@
       for (const m of modeList) {
         const L = [];
         for (let i = 0; i < NUM_TONES; i++) {
-          const c = Math.round(toneHz(m, i) / bh); let v = -200;
-          for (let k = c - 1; k <= c + 1; k++) if (k > 0 && k < n && Number.isFinite(data[k])) v = Math.max(v, data[k]);
+          const c = Math.round(toneHz(m, i) / bh), r = Math.max(0, Math.floor((m.step / bh - 1) / 2)); let v = -200;
+          for (let k = c - r; k <= c + r; k++) if (k > 0 && k < n && Number.isFinite(data[k])) v = Math.max(v, data[k]);
           L.push(v);
         }
         levels[m.id] = L;
