@@ -129,6 +129,7 @@
       $("sendErr").textContent = e.message; $("sendErr").hidden = false; return;
     }
     log("SEND_START", mode.id, speed.id, "vol " + $("vol").value, tx.payloadBytes + " bytes", tx.tones.length + " tones", tx.duration.toFixed(2) + " s", JSON.stringify(text));
+    log("SEND_TRACE", tx.trace);
     $("sendBtn").textContent = "Stop";
     $("sendState").textContent = "Sending " + tx.payloadBytes + " bytes in " + mode.label + " mode…";
     const thisTx = tx;
@@ -141,21 +142,42 @@
   };
 
   // ---------- receiver ----------
-  let analyser = null, stream = null, rx = null, wake = null, micSettings = null, inboxCount = 0;
+  let micSource = null, stream = null, rx = null, wake = null, micSettings = null, inboxCount = 0, starting = false;
   function getLoopIn() {
     const c = audio();
     if (!loopIn) loopIn = c.createGain();
     return loopIn;
   }
+  // test mode only: ?reverb=0.4 adds a simulated room echo (decay time in seconds)
+  let loopOut = null;
+  function getLoopOut() {
+    if (loopOut) return loopOut;
+    const c = audio(), rt = parseFloat(params.get("reverb") || "0");
+    loopOut = c.createGain();
+    getLoopIn().connect(loopOut);
+    if (rt > 0) {
+      const len = Math.floor(c.sampleRate * rt * 1.5), ir = c.createBuffer(1, len, c.sampleRate), d = ir.getChannelData(0);
+      const delay = Math.floor(c.sampleRate * 0.004);
+      for (let i = delay; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(10, -3 * (i - delay) / (c.sampleRate * rt));
+      const conv = c.createConvolver(); conv.normalize = true; conv.buffer = ir;
+      const wet = c.createGain(); wet.gain.value = parseFloat(params.get("wet") || "1");
+      getLoopIn().connect(conv).connect(wet).connect(loopOut);
+    }
+    return loopOut;
+  }
   function setStatus(s, text) { $("status").dataset.s = s; $("statusText").textContent = text; }
 
   async function startListening() {
+    if (starting) return;
+    starting = true;
+    try { await startListeningInner(); } finally { starting = false; }
+  }
+  async function startListeningInner() {
     $("micErr").hidden = true;
     const c = audio();
-    analyser = c.createAnalyser();
-    analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0; analyser.minDecibels = -150; analyser.maxDecibels = -10;
+    let source;
     if (LOOPBACK) {
-      getLoopIn().connect(analyser);
+      source = getLoopOut();
     } else {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         $("micErr").textContent = "This browser blocks the microphone here. Open the page from its https address (GitHub Pages), not as a local file.";
@@ -169,12 +191,13 @@
         $("micErr").hidden = false; return;
       }
       try { micSettings = stream.getAudioTracks()[0].getSettings(); } catch (e) { micSettings = null; }
-      c.createMediaStreamSource(stream).connect(analyser);
+      micSource = c.createMediaStreamSource(stream);
+      source = micSource;
     }
     $("lvRate").textContent = Math.round(c.sampleRate / 1000) + " kHz";
     try { wake = await navigator.wakeLock.request("screen"); } catch (e) { wake = null; }
     let lastLevel = 0;
-    rx = SD.createReceiver(c, analyser, {
+    rx = await SD.createReceiver(c, source, {
       onState(s, m) {
         if (s === "idle") { setStatus("idle", "Listening… waiting for a message"); $("lvSym").textContent = "0"; }
         if (s === "receiving") {
@@ -183,7 +206,7 @@
           log("RX_START", m);
         }
       },
-      onSymbol(nib, count, r) { $("lvSym").textContent = count; },
+      onSymbol(nib, count) { $("lvSym").textContent = count; },
       onLevel(l) {
         const now = performance.now();
         if (now - lastLevel < 120) return; lastLevel = now;
@@ -198,19 +221,20 @@
       },
       onError(msg, info) {
         log("RX_FAIL", info && info.mode, msg, info && info.nibbles != null ? info.nibbles + " symbols" : "", info && info.avgSnr != null ? "snr " + info.avgSnr.toFixed(1) : "");
+        if (info && info.trace) log("RX_TRACE", info.trace);
         $("hero").className = "hero failed"; $("heroMsg").textContent = "Message not received";
         $("heroSub").textContent = msg + " Ask the sender to try again, a little closer or louder.";
       }
-    });
+    }, { engine: params.get("engine") || "worklet", cfg: params.has("echoDb") ? { echoDb: +params.get("echoDb") } : null });
     rx.start();
-    log("LISTEN_START", "rate " + c.sampleRate, LOOPBACK ? "loopback" : JSON.stringify(micSettings || {}));
+    log("LISTEN_START", "rate " + c.sampleRate, "engine " + rx.engine, LOOPBACK ? "loopback" : JSON.stringify(micSettings || {}));
     $("listenBtn").textContent = "Stop listening";
   }
   function stopListening() {
     if (rx) rx.stop(); rx = null;
     if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null;
-    if (analyser) try { analyser.disconnect(); } catch (e) {}
-    analyser = null;
+    if (micSource) try { micSource.disconnect(); } catch (e) {}
+    micSource = null;
     if (wake) { wake.release().catch(() => {}); wake = null; }
     setStatus("off", "Not listening"); $("listenBtn").textContent = "Start listening";
     log("LISTEN_STOP");
