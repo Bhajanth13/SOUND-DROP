@@ -1,24 +1,21 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "bootstrap/dist/css/bootstrap.min.css";
-import "@fontsource/im-fell-english-sc/latin-400.css";
-import "@fontsource/crimson-pro/latin-400.css";
-import "@fontsource/crimson-pro/latin-600.css";
-import "@fontsource/special-elite/latin-400.css";
-import "@fontsource-variable/archivo/wdth.css";
-import "./index.css";
-import "./theme-motion.css";
-import "./theme-steampunk.css";
-import "./theme-isometric.css";
+import "./app.css";
 import App from "./App.jsx";
 
-// Keep the browser's install offer (Chrome, Edge, Android) so the Home page can show an Install button.
+// Follow the phone's light or dark setting (Bootstrap colour modes).
+const dark = window.matchMedia("(prefers-color-scheme: dark)");
+const setMode = () => document.documentElement.setAttribute("data-bs-theme", dark.matches ? "dark" : "light");
+setMode();
+dark.addEventListener("change", setMode);
+
+// Keep the browser's install offer (Chrome, Edge, Android) for the Install button.
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
-  window.__sdInstall = e;
-  window.dispatchEvent(new Event("sd-install-ready"));
+  window.installPrompt = e;
+  window.dispatchEvent(new Event("install-ready"));
 });
-window.addEventListener("appinstalled", () => { window.__sdInstall = null; window.dispatchEvent(new Event("sd-install-ready")); });
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -26,9 +23,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   </React.StrictMode>
 );
 
-// Service Worker: keeps a copy of the app so it opens offline (production only).
-if (import.meta.env.PROD && "serviceWorker" in navigator && !new URLSearchParams(location.search).has("nosw")) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  });
+// Service Worker: saves the app on the device so it opens offline (production build only).
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js");
 }

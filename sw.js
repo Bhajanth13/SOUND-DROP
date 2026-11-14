@@ -1,35 +1,33 @@
-// SoundDrop Service Worker: offline use after the first visit.
-// Network first: when online, every request goes to the network so the newest
-// version always loads, and a copy is saved. When the network is unavailable
-// (airplane mode), the saved copy is used instead.
-const CACHE = "sounddrop-v1.4.0";
-const SHELL = ["./", "./index.html", "./assets/app.js", "./assets/app.css", "./icon.svg", "./manifest.webmanifest",
+// SoundDrop Service Worker: lets the app open with no internet.
+// Network first: when online the newest version loads and a copy is saved;
+// when offline (airplane mode) the saved copy is used.
+const CACHE = "sounddrop-v2";
+const FILES = ["./", "./index.html", "./assets/app.js", "./assets/app.css", "./icon.svg", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png"];
-// Font files of every design, saved at install so all designs look the same offline.
-// The list is filled in by scripts/publish.mjs from the build output.
-const FONTS = ["./assets/archivo-latin-ext-wdth-normal.woff2", "./assets/archivo-latin-wdth-normal.woff2", "./assets/archivo-vietnamese-wdth-normal.woff2", "./assets/crimson-pro-latin-400-normal.woff2", "./assets/crimson-pro-latin-600-normal.woff2", "./assets/im-fell-english-sc-latin-400-normal.woff2", "./assets/special-elite-latin-400-normal.woff2"];
 
+// install: save every file of the app
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.concat(FONTS))).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));
 });
 
+// activate: delete copies saved by older versions
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil(caches.keys()
+    .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    .then(() => self.clients.claim()));
 });
 
+// fetch: try the network, fall back to the saved copy
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
-  const key = req.mode === "navigate" ? "./index.html" : req;
+  if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
+  const key = req.mode === "navigate" ? "./index.html" : req;      // every page load is index.html
   event.respondWith(
-    caches.open(CACHE).then((cache) =>
-      fetch(req)
-        .then((res) => { if (res && res.ok) cache.put(key, res.clone()); return res; })
-        .catch(() => cache.match(key, { ignoreSearch: req.mode === "navigate" }).then((hit) => hit || Response.error()))
-    )
+    fetch(req)
+      .then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((cache) => cache.put(key, copy)); }
+        return res;
+      })
+      .catch(() => caches.match(key, { ignoreSearch: true }))
   );
 });

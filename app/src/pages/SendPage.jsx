@@ -1,137 +1,104 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { useSoundDrop } from "../hooks/SoundDropContext.jsx";
 import { FORMATS, EMPTY, pack, validate, byteLength } from "../lib/formats.js";
-import { MAX_BYTES, SPEEDS } from "../lib/modem.js";
-import ModeSettings, { Segmented } from "../components/ModeSettings.jsx";
+import { MODES, MAX_BYTES, airTime } from "../lib/modem.js";
 import Field from "../components/Field.jsx";
-import LogPanel from "../components/LogPanel.jsx";
 
-const SAMPLES = ["Hello from SoundDrop!", "Meet at the library at 4 pm", "Lab record due on Monday"];
-
-// time on air: START, calibration sweep (0.51 s) and sync (0.09 s), data, END
-function airTime(bytes, speed) {
-  const sym = SPEEDS[speed].symbolMs / 1000, marker = Math.max(sym * 3, 0.25);
-  return 2 * marker + 0.6 + (bytes + 3) * 2 * sym;
+// A row of Bootstrap toggle buttons that works like radio buttons
+function Choice({ name, options, value, onChange }) {
+  return (
+    <div className="btn-group w-100 flex-wrap" role="group" aria-label={name}>
+      {options.map((o) => (
+        <span key={o.id} className="d-contents">
+          <input type="radio" className="btn-check" name={name} id={name + o.id} checked={value === o.id} onChange={() => onChange(o.id)} />
+          <label className="btn btn-outline-primary" htmlFor={name + o.id}>{o.label}</label>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export default function SendPage() {
   const { send, stopSending, sending } = useSoundDrop();
   const [format, setFormat] = useState("text");
   const [values, setValues] = useState({ ...EMPTY, text: { text: "Hello from SoundDrop!" } });
-  const [touched, setTouched] = useState(false);
   const [mode, setMode] = useState("audible");
-  const [speed, setSpeed] = useState("normal");
   const [volume, setVolume] = useState(0.7);
-  const [status, setStatus] = useState("");
-  const wasSending = useRef(false);
-  useEffect(() => {
-    if (sending) wasSending.current = true;
-    else if (wasSending.current) {
-      wasSending.current = false;
-      setStatus((st) => (st.startsWith("Sending") ? "Sent. Check the receiving device." : st));
-    }
-  }, [sending]);
+  const [tried, setTried] = useState(false);          // show errors only after the first Send
 
   const v = values[format];
-  const errors = useMemo(() => validate(format, v), [format, v]);
+  const errors = validate(format, v);
   const valid = Object.keys(errors).length === 0;
-  const packed = useMemo(() => { try { return pack(format, v); } catch (e) { return ""; } }, [format, v]);
-  const bytes = byteLength(packed);
-  const pct = Math.min(100, (bytes / MAX_BYTES) * 100);
-  const show = (k) => (touched ? errors[k] : undefined);
-  const set = (k) => (e) => setValues((all) => ({ ...all, [format]: { ...all[format], [k]: e.target.value } }));
+  const bytes = byteLength(pack(format, v));
+  const err = (k) => (tried ? errors[k] : undefined);
+  const set = (k) => (e) => setValues({ ...values, [format]: { ...v, [k]: e.target.value } });
 
   function onSubmit(e) {
-    e.preventDefault();
-    setTouched(true);
-    if (sending) { stopSending(); setStatus("Stopped."); return; }
-    if (!valid) { setStatus("Fix the highlighted field first."); return; }
-    try {
-      const tx = send(packed, { mode, speed, volume });
-      setStatus("Sending " + tx.payloadBytes + " bytes in " + (mode === "silent" ? "Silent" : "Audible") + " mode…");
-    } catch (err) { setStatus(err.message); }
+    e.preventDefault();                                // no page reload
+    if (sending) return stopSending();
+    setTried(true);
+    if (valid) send(pack(format, v), mode, volume);
   }
 
   return (
-    <form className="sd-page sd-send" noValidate onSubmit={onSubmit}>
-      <header className="sd-page-head">
-        <h1>Send</h1>
-        <p className="sd-lead">Start listening on the other device first, then send.</p>
-      </header>
+    <form noValidate onSubmit={onSubmit} className="sd-narrow">
+      <h1 className="h3">Send</h1>
+      <p className="text-body-secondary">Tap Listen on the other device first, then send.</p>
 
-      <div className="sd-grid-2">
-        <section className="sd-panel">
-          <h2 className="sd-h2">What to send</h2>
-          <div className="sd-scrollrow">
-            <Segmented wrap name="format" options={FORMATS} value={format} onChange={(f) => { setFormat(f); setTouched(false); setStatus(""); }} />
+      <div className="card mb-3"><div className="card-body vstack gap-3">
+        <Choice name="format" options={FORMATS} value={format} onChange={(f) => { setFormat(f); setTried(false); }} />
+
+        {format === "text" && <Field as="textarea" id="text" label="Message" rows={3} value={v.text} onChange={set("text")} error={err("text")} />}
+        {format === "link" && <Field id="url" label="Web address" type="url" value={v.url} onChange={set("url")} error={err("url")} placeholder="https://example.com" />}
+        {format === "wifi" && (
+          <>
+            <Field id="ssid" label="Network name" value={v.ssid} onChange={set("ssid")} error={err("ssid")} />
+            <Field as="select" id="security" label="Security" value={v.security} onChange={set("security")}>
+              <option value="WPA">WPA / WPA2</option>
+              <option value="nopass">None (open network)</option>
+            </Field>
+            {v.security !== "nopass" && <Field id="password" label="Password" value={v.password} onChange={set("password")} error={err("password")} autoComplete="off" />}
+          </>
+        )}
+        {format === "contact" && (
+          <>
+            <Field id="name" label="Name" value={v.name} onChange={set("name")} error={err("name")} />
+            <Field id="phone" label="Phone" type="tel" value={v.phone} onChange={set("phone")} error={err("phone")} placeholder="+91 98450 12345" />
+            <Field id="email" label="Email (optional)" type="email" value={v.email} onChange={set("email")} error={err("email")} />
+          </>
+        )}
+
+        <div>
+          <div className="d-flex justify-content-between small text-body-secondary">
+            <span className={bytes > MAX_BYTES ? "text-danger" : ""}>{bytes} of {MAX_BYTES} bytes</span>
+            <span>about {airTime(bytes).toFixed(1)} s</span>
           </div>
-
-          {format === "text" && (
-            <>
-              <Field as="textarea" id="f-text" label="Message" rows={3} value={v.text} onChange={set("text")} error={show("text")} placeholder="Type a short sentence" />
-              <div className="sd-scrollrow sd-samples" aria-label="Example messages">
-                {SAMPLES.map((s) => (
-                  <button type="button" key={s} className="sd-chip" onClick={() => setValues((all) => ({ ...all, text: { text: s } }))}>{s}</button>
-                ))}
-              </div>
-            </>
-          )}
-          {format === "link" && (
-            <Field id="f-url" label="Web address" type="url" inputMode="url" value={v.url} onChange={set("url")} error={show("url")} placeholder="https://example.com/notes" hint="The receiver can open it with one tap." />
-          )}
-          {format === "wifi" && (
-            <div className="sd-fields-2">
-              <Field id="f-ssid" label="Network name" value={v.ssid} onChange={set("ssid")} error={show("ssid")} placeholder="RVU-Lab" />
-              <Field as="select" id="f-sec" label="Security" value={v.security} onChange={set("security")}>
-                <option value="WPA">WPA / WPA2</option>
-                <option value="WEP">WEP</option>
-                <option value="nopass">None (open)</option>
-              </Field>
-              {v.security !== "nopass" && (
-                <div className="sd-span-2"><Field id="f-pass" label="Password" value={v.password} onChange={set("password")} error={show("password")} placeholder="8 to 63 characters" autoComplete="off" /></div>
-              )}
-            </div>
-          )}
-          {format === "contact" && (
-            <div className="sd-fields-2">
-              <div className="sd-span-2"><Field id="f-name" label="Name" value={v.name} onChange={set("name")} error={show("name")} placeholder="Bhajanth V" autoComplete="name" /></div>
-              <Field id="f-phone" label="Phone" type="tel" inputMode="tel" value={v.phone} onChange={set("phone")} error={show("phone")} placeholder="+91 98450 12345" />
-              <Field id="f-email" label="Email (optional)" type="email" value={v.email} onChange={set("email")} error={show("email")} placeholder="name@example.com" />
-            </div>
-          )}
-
-          <div className="sd-size">
-            <div className="sd-size-row">
-              <span className={bytes > MAX_BYTES ? "sd-over" : ""}>{bytes} of {MAX_BYTES} bytes</span>
-              <span>about {airTime(bytes, speed).toFixed(1)} s</span>
-            </div>
-            <div className="sd-meter" role="progressbar" aria-label="Message size" aria-valuenow={bytes} aria-valuemin="0" aria-valuemax={MAX_BYTES}>
-              <i className={bytes > MAX_BYTES ? "over" : ""} style={{ width: pct + "%" }} />
-            </div>
-            {touched && errors._size && <div className="sd-error-text">{errors._size}</div>}
+          <div className="progress" style={{ height: 6 }}>
+            <div className={"progress-bar" + (bytes > MAX_BYTES ? " bg-danger" : "")} style={{ width: Math.min(100, (bytes / MAX_BYTES) * 100) + "%" }} />
           </div>
-        </section>
-
-        <div className="sd-stack">
-          <section className="sd-panel">
-            <h2 className="sd-h2">How to send</h2>
-            <ModeSettings mode={mode} speed={speed} volume={volume} onMode={setMode} onSpeed={setSpeed} onVolume={setVolume} />
-          </section>
-
-          <div className="sd-actionbar">
-            <div className="sd-actionbar-inner">
-              <button type="submit" className={"sd-send-btn" + (sending ? " stop" : "")} disabled={!sending && touched && !valid}>
-                {sending && <span className="sd-wavebars" aria-hidden="true"><i /><i /><i /><i /><i /></span>}
-                {sending ? "Stop sending" : "Send through sound"}
-              </button>
-              <div className="sd-meter sd-progress" aria-hidden="true"><i style={{ width: (sending ? sending.progress * 100 : 0) + "%" }} /></div>
-              <p className="sd-status-text" aria-live="polite">{status || (mode === "silent" ? "Silent mode: keep the phones within 1–2 m." : "Ready.")}</p>
-            </div>
-          </div>
+          {err("_size") && <div className="text-danger small mt-1">{errors._size}</div>}
         </div>
-      </div>
+      </div></div>
 
-      <div className="sd-after"><LogPanel page="send" /></div>
+      <div className="card mb-3"><div className="card-body vstack gap-3">
+        <div>
+          <div className="form-label">Mode</div>
+          <Choice name="mode" options={Object.values(MODES)} value={mode} onChange={setMode} />
+          <div className="form-text">{mode === "silent" ? "17.5–19.2 kHz, above what most adults hear. Keep the devices within 1–2 m." : "1.5–4 kHz, a short chirp. Most reliable."}</div>
+        </div>
+        <div>
+          <label htmlFor="volume" className="form-label">Volume: {Math.round(volume * 100)}%</label>
+          <input type="range" className="form-range" id="volume" min="0.1" max="1" step="0.05" value={volume} onChange={(e) => setVolume(+e.target.value)} />
+        </div>
+      </div></div>
+
+      <button type="submit" className={"btn btn-lg w-100 " + (sending ? "btn-danger" : "btn-primary")}>
+        {sending ? "Stop sending" : "Send through sound"}
+      </button>
+      <div className="progress mt-2" style={{ height: 6 }} aria-hidden="true">
+        <div className="progress-bar" style={{ width: (sending ? sending.progress * 100 : 0) + "%" }} />
+      </div>
+      {tried && !valid && <p className="text-danger small mt-2">Fix the highlighted field first.</p>}
     </form>
   );
 }

@@ -1,35 +1,44 @@
 import { useHashRoute } from "./hooks/useHashRoute.js";
-import { SoundDropProvider } from "./hooks/SoundDropContext.jsx";
-import { ThemeProvider } from "./hooks/ThemeContext.jsx";
-import NavBar from "./components/NavBar.jsx";
-import TabBar from "./components/TabBar.jsx";
+import { SoundDropProvider, useSoundDrop } from "./hooks/SoundDropContext.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import SendPage from "./pages/SendPage.jsx";
 import ReceivePage from "./pages/ReceivePage.jsx";
-import LabPage from "./pages/LabPage.jsx";
-import AboutPage from "./pages/AboutPage.jsx";
 
-const PAGES = { home: HomePage, send: SendPage, receive: ReceivePage, lab: LabPage, about: AboutPage };
-const TITLES = { home: "SoundDrop", send: "Send · SoundDrop", receive: "Receive · SoundDrop", lab: "Range Test Lab · SoundDrop", about: "How it works · SoundDrop" };
+const PAGES = { home: HomePage, send: SendPage, receive: ReceivePage };
+const LINKS = [["home", "Home", "#/"], ["send", "Send", "#/send"], ["receive", "Receive", "#/receive"]];
+
+function NavBar({ route }) {
+  const { listening } = useSoundDrop();
+  return (
+    <nav className="navbar border-bottom bg-body sticky-top">
+      <div className="container sd-container">
+        <a className="navbar-brand fw-bold d-flex align-items-center gap-2" href="#/">
+          <img src="./icon.svg" width="28" height="28" alt="" /> SoundDrop
+        </a>
+        <div className="d-flex gap-1">
+          {LINKS.map(([id, label, href]) => (
+            <a key={id} href={href} className={"nav-link px-2" + (route === id ? " active fw-semibold" : "")} aria-current={route === id ? "page" : undefined}>
+              {label}{id === "receive" && listening && <span className="sd-dot" title="Listening" />}
+            </a>
+          ))}
+        </div>
+      </div>
+    </nav>
+  );
+}
 
 export default function App() {
   const route = useHashRoute();
   const Page = PAGES[route];
-  document.title = TITLES[route];
   return (
-    <ThemeProvider>
-      <SoundDropProvider>
-        <div className="sd-app" data-route={route}>
-          <NavBar route={route} />
-          <main className="sd-container sd-main">
-            <Page />
-          </main>
-          <footer className="sd-container sd-footer">
-            SoundDrop: CS1309 Web Technology mini project by Bhajanth V, RV University
-          </footer>
-          <TabBar route={route} />
-        </div>
-      </SoundDropProvider>
-    </ThemeProvider>
+    <SoundDropProvider>
+      <NavBar route={route} />
+      <main className="container sd-container py-4">
+        <Page />
+      </main>
+      <footer className="container sd-container pb-4 small text-body-secondary">
+        SoundDrop: CS1309 Web Technology mini project by Bhajanth V, RV University
+      </footer>
+    </SoundDropProvider>
   );
 }

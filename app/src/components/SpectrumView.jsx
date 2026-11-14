@@ -1,106 +1,42 @@
 import { useEffect, useRef } from "react";
-import { MODES, toneHz, NUM_TONES } from "../lib/modem.js";
-import { useTheme } from "../hooks/ThemeContext.jsx";
+import { MODES, NUM_TONES, toneHz } from "../lib/modem.js";
 
-// Live frequency spectrum of the microphone from the Web Audio AnalyserNode
-// (an FFT), drawn about 30 times a second. Classic draws a filled line,
-// Steampunk an ink trace on graph paper, Isometric a row of 3-D bars.
-export default function SpectrumView({ getAnalyser, active, height = 180, maxHz = 22000, markers = [] }) {
+// Live frequency spectrum of the microphone (0-22 kHz), drawn on a canvas
+// about 30 times a second from the AnalyserNode's FFT.
+const MAX_HZ = 22000, TOP_DB = -20, BOTTOM_DB = -140;
+
+export default function SpectrumView({ getAnalyser, active }) {
   const ref = useRef(null);
-  const { theme } = useTheme();
   useEffect(() => {
-    let raf = 0, last = 0, data = null;
-    const draw = (ts) => {
+    let raf, last = 0, data;
+    function draw(time) {
       raf = requestAnimationFrame(draw);
-      if (ts - last < 33) return;
-      last = ts;
-      const cv = ref.current;
-      if (!cv) return;
-      const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
-      if (!w || !h) return;
-      if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-      const g = cv.getContext("2d");
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const css = getComputedStyle(cv);
-      const col = (k) => css.getPropertyValue(k).trim() || "#888";
-      const font = css.getPropertyValue("--sd-spec-font").trim() || "11px system-ui, sans-serif";
-      const iso = theme === "isometric";
-      const padB = 18, top = -20, bot = iso ? -105 : -140;   // iso bars start above the noise floor
-      const depth = iso ? 14 : 0;                      // room for the 3-D bar tops
-      const x = (hz) => (hz / maxHz) * (w - depth);
-      const y = (db) => depth + ((top - db) / (top - bot)) * (h - padB - depth);
-      g.clearRect(0, 0, w, h);
+      if (time - last < 33) return;
+      last = time;
+      const canvas = ref.current, w = canvas.clientWidth, h = canvas.clientHeight, dpr = window.devicePixelRatio || 1;
+      canvas.width = w * dpr; canvas.height = h * dpr;              // sharp on phone screens
+      const g = canvas.getContext("2d");
+      g.scale(dpr, dpr);
+      const css = getComputedStyle(canvas);
+      const x = (hz) => (hz / MAX_HZ) * w;
+      const y = (db) => ((TOP_DB - Math.max(BOTTOM_DB, Math.min(TOP_DB, db))) / (TOP_DB - BOTTOM_DB)) * (h - 16);
 
-      // paper grid for steampunk
-      if (theme === "steampunk") {
-        g.strokeStyle = col("--sd-grid"); g.lineWidth = 0.5;
-        for (let gx = 0; gx < w; gx += 10) { g.beginPath(); g.moveTo(gx + 0.5, 0); g.lineTo(gx + 0.5, h - padB); g.stroke(); }
-        for (let gy = 0; gy < h - padB; gy += 10) { g.beginPath(); g.moveTo(0, gy + 0.5); g.lineTo(w, gy + 0.5); g.stroke(); }
-      }
-      // the two tone bands
-      g.fillStyle = col("--sd-band");
-      Object.values(MODES).forEach((m) => {
-        const a = x(toneHz(m, 0) - m.step / 2), b = x(toneHz(m, NUM_TONES - 1) + m.step / 2);
-        g.fillRect(a, depth, b - a, h - padB - depth);
-      });
-      // axis labels
-      g.fillStyle = col("--sd-axis"); g.font = font; g.textBaseline = "bottom";
-      for (let hz = 0; hz <= maxHz; hz += 5000) {
-        if (theme !== "steampunk") {
-          g.strokeStyle = col("--sd-grid"); g.lineWidth = 1;
-          g.beginPath(); g.moveTo(Math.round(x(hz)) + 0.5, depth); g.lineTo(Math.round(x(hz)) + 0.5, h - padB); g.stroke();
-        }
-        g.textAlign = hz === 0 ? "left" : "center";
-        g.fillText(hz === 0 ? "0" : hz / 1000 + " kHz", x(hz) + (hz === 0 ? 2 : 0), h);
-      }
-      markers.forEach((mk) => {
-        g.strokeStyle = col("--sd-accent"); g.lineWidth = 1; g.setLineDash([3, 3]);
-        g.beginPath(); g.moveTo(x(mk) + 0.5, depth); g.lineTo(x(mk) + 0.5, h - padB); g.stroke(); g.setLineDash([]);
-      });
-      const an = active ? getAnalyser() : null;
-      if (!an) {
-        g.fillStyle = col("--sd-axis"); g.textAlign = "center"; g.textBaseline = "middle";
-        g.fillText("Start listening to see the live spectrum", w / 2, (h - padB) / 2);
-        return;
-      }
-      if (!data || data.length !== an.frequencyBinCount) data = new Float32Array(an.frequencyBinCount);
-      an.getFloatFrequencyData(data);
-      const binHz = an.context.sampleRate / an.fftSize, lastBin = Math.min(data.length - 1, Math.floor(maxHz / binHz));
-      const val = (i) => (Number.isFinite(data[i]) ? Math.max(bot, Math.min(top, data[i])) : bot);
+      g.fillStyle = css.getPropertyValue("--sd-band").trim();                // the two tone bands
+      for (const m of Object.values(MODES)) g.fillRect(x(toneHz(m, 0)), 0, x(toneHz(m, NUM_TONES - 1)) - x(toneHz(m, 0)), h - 16);
+      g.fillStyle = css.color; g.font = "11px system-ui"; g.textAlign = "center";
+      for (let hz = 5000; hz < MAX_HZ; hz += 5000) g.fillText(hz / 1000 + " kHz", x(hz), h - 3);
 
-      if (iso) {
-        // group bins into columns and draw each as an isometric prism
-        const cols = Math.max(24, Math.floor((w - depth) / 7));
-        const cw = (w - depth) / cols, dx = depth * 0.866, dy = depth * 0.5;
-        const front = col("--sd-accent"), side = col("--sd-accent-dark"), cap = col("--sd-accent-light");
-        for (let c = 0; c < cols; c++) {
-          const f0 = (c / cols) * maxHz, f1 = ((c + 1) / cols) * maxHz;
-          let v = bot;
-          for (let i = Math.max(1, Math.floor(f0 / binHz)); i <= Math.min(lastBin, Math.ceil(f1 / binHz)); i++) v = Math.max(v, val(i));
-          const x0 = c * cw + 0.5, bw = cw - 1.5, yTop = y(v), yBase = h - padB;
-          if (yBase - yTop < 1) continue;
-          g.fillStyle = side;   // right side
-          g.beginPath(); g.moveTo(x0 + bw, yTop); g.lineTo(x0 + bw + dx * 0.45, yTop - dy * 0.45); g.lineTo(x0 + bw + dx * 0.45, yBase - dy * 0.45); g.lineTo(x0 + bw, yBase); g.closePath(); g.fill();
-          g.fillStyle = cap;    // top
-          g.beginPath(); g.moveTo(x0, yTop); g.lineTo(x0 + dx * 0.45, yTop - dy * 0.45); g.lineTo(x0 + bw + dx * 0.45, yTop - dy * 0.45); g.lineTo(x0 + bw, yTop); g.closePath(); g.fill();
-          g.fillStyle = front;
-          g.fillRect(x0, yTop, bw, yBase - yTop);
-        }
-        return;
-      }
+      const an = active && getAnalyser();
+      if (!an) { g.fillText("Tap Listen to see the live spectrum", w / 2, h / 2); return; }
+      if (!data) data = new Float32Array(an.frequencyBinCount);
+      an.getFloatFrequencyData(data);                                // dB level of every FFT bin
+      const binHz = an.context.sampleRate / an.fftSize;
       g.beginPath();
-      for (let i = 1; i <= lastBin; i++) {
-        const px = x(i * binHz), py = y(val(i));
-        if (i === 1) g.moveTo(px, py); else g.lineTo(px, py);
-      }
-      g.strokeStyle = col("--sd-accent"); g.lineWidth = theme === "steampunk" ? 1.6 : 1.4; g.stroke();
-      if (theme !== "steampunk") {
-        g.lineTo(x(lastBin * binHz), h - padB); g.lineTo(x(binHz), h - padB); g.closePath();
-        g.fillStyle = col("--sd-fill"); g.fill();
-      }
-    };
+      for (let i = 1; i * binHz <= MAX_HZ; i++) g.lineTo(x(i * binHz), y(data[i]));
+      g.strokeStyle = css.getPropertyValue("--bs-primary").trim(); g.lineWidth = 1.5; g.stroke();
+    }
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [getAnalyser, active, maxHz, markers, theme]);
-  return <canvas ref={ref} className="sd-spectrum" style={{ height }} aria-label="Live frequency spectrum of the microphone" role="img" />;
+  }, [getAnalyser, active]);
+  return <canvas ref={ref} className="sd-spectrum" role="img" aria-label="Live frequency spectrum of the microphone" />;
 }

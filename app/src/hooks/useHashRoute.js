@@ -1,24 +1,19 @@
-// Small hash router: #/send -> "send". Hash routes work on GitHub Pages
-// without any server configuration, and need no extra library.
+// Small hash router: "#/send" -> "send". The part after # never reaches the
+// server, so GitHub Pages always serves index.html and React picks the page.
 import { useEffect, useState } from "react";
 
-export const ROUTES = ["home", "send", "receive", "lab", "about"];
-
-function current() {
-  const r = window.location.hash.replace(/^#\/?/, "").split(/[?/]/)[0];
+const ROUTES = ["home", "send", "receive"];
+const current = () => {
+  const r = window.location.hash.replace(/^#\/?/, "");
   return ROUTES.includes(r) ? r : "home";
-}
-
-export function navigate(route) {
-  window.location.hash = route === "home" ? "#/" : "#/" + route;
-}
+};
 
 export function useHashRoute() {
   const [route, setRoute] = useState(current);
   useEffect(() => {
-    const on = () => { setRoute(current()); window.scrollTo(0, 0); };
-    window.addEventListener("hashchange", on);
-    return () => window.removeEventListener("hashchange", on);
+    const onChange = () => { setRoute(current()); window.scrollTo(0, 0); };
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
   }, []);
   return route;
 }

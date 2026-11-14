@@ -1,0 +1,30 @@
+/* SoundDrop: a few additions to Bootstrap 5. Colours follow the app icon. */
+:root, [data-bs-theme="light"] {
+  --bs-primary: #2f5bea;
+  --bs-primary-rgb: 47, 91, 234;
+  --bs-link-color: #2f5bea;
+  --bs-link-color-rgb: 47, 91, 234;
+  --sd-band: rgba(47, 91, 234, 0.1);
+}
+[data-bs-theme="dark"] {
+  --bs-primary: #7d9bff;
+  --bs-primary-rgb: 125, 155, 255;
+  --bs-link-color: #7d9bff;
+  --bs-link-color-rgb: 125, 155, 255;
+  --sd-band: rgba(125, 155, 255, 0.14);
+}
+.btn-primary { --bs-btn-bg: var(--bs-primary); --bs-btn-border-color: var(--bs-primary); --bs-btn-hover-bg: #2449c4; --bs-btn-hover-border-color: #2449c4; --bs-btn-active-bg: #1f3fae; }
+.btn-outline-primary { --bs-btn-color: var(--bs-primary); --bs-btn-border-color: var(--bs-primary); --bs-btn-hover-bg: var(--bs-primary); --bs-btn-hover-border-color: var(--bs-primary); --bs-btn-active-bg: var(--bs-primary); --bs-btn-active-border-color: var(--bs-primary); }
+.progress-bar { background-color: var(--bs-primary); }
+
+.sd-container { max-width: 760px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.sd-narrow { max-width: 640px; margin: 0 auto; }
+.d-contents { display: contents; }
+.nav-link.active { color: var(--bs-primary); }
+.sd-dot { display: inline-block; width: 8px; height: 8px; margin-left: 4px; border-radius: 50%; background: var(--bs-success); vertical-align: middle; }
+
+/* the big round Listen button */
+.sd-listen { width: 140px; height: 140px; border-radius: 50%; font-size: 1.4rem; font-weight: 600; }
+.sd-spectrum { display: block; width: 100%; height: 160px; color: var(--bs-secondary-color); }
+.form-range::-webkit-slider-thumb { background: var(--bs-primary); }
+.form-range::-moz-range-thumb { background: var(--bs-primary); }

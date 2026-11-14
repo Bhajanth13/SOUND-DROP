@@ -1,72 +1,59 @@
-import { useState } from "react";
-import { useTheme } from "../hooks/ThemeContext.jsx";
 import { useSoundDrop } from "../hooks/SoundDropContext.jsx";
 import { MODES } from "../lib/modem.js";
+import { summary, formatLabel } from "../lib/formats.js";
 import MessageCard from "../components/MessageCard.jsx";
-import InboxTable from "../components/InboxTable.jsx";
 import SpectrumView from "../components/SpectrumView.jsx";
-import SignalReadout from "../components/SignalReadout.jsx";
-import LogPanel from "../components/LogPanel.jsx";
-
-const wide = () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
 
 export default function ReceivePage() {
-  const { listening, startListening, stopListening, rxStatus, rxMode, symbols, signal, lastResult, inbox, clearInbox, micError, sampleRate, analyser } = useSoundDrop();
-  const [specOpen, setSpecOpen] = useState(wide);
-  const { theme } = useTheme();
-  const level = listening && signal != null ? Math.max(0, Math.min(1, (signal - 6) / 40)) : 0;   // 0..1 for the glow
-
-  const state = !listening ? "off" : rxStatus === "receiving" ? "receiving" : "idle";
-  const statusText = state === "off" ? "Tap to start listening"
-    : state === "receiving" ? (rxMode ? "Receiving " + MODES[rxMode].label + " message…" : "Receiving…")
-    : "Listening for a message";
+  const { listening, startListening, stopListening, status, rxMode, tones, signal, result, micError, inbox, clearInbox, analyser } = useSoundDrop();
+  const statusText = !listening ? "Tap Listen to start."
+    : status === "receiving" ? "Receiving " + MODES[rxMode].label + " message…"
+    : "Listening for a message (Audible and Silent).";
 
   return (
-    <div className="sd-page sd-receive">
-      <header className="sd-page-head">
-        <h1>Receive</h1>
-        <p className="sd-lead">Audible and Silent messages are both picked up automatically.</p>
-      </header>
+    <div className="sd-narrow">
+      <h1 className="h3">Receive</h1>
 
-      <div className="sd-grid-2">
-        <div className="sd-stack">
-          <section className="sd-panel sd-listen-panel">
-            <button type="button" style={{ "--lvl": level }} className={"sd-listen " + state} onClick={() => (listening ? stopListening() : startListening())} aria-pressed={listening}>
-              <span className="sd-listen-rings" aria-hidden="true"><i /><i /><i /></span>
-              <span className="sd-listen-glow" aria-hidden="true" />
-              <span className="sd-listen-label">{listening ? "Stop" : "Listen"}</span>
-            </button>
-            <p className="sd-listen-status" aria-live="polite">{statusText}</p>
-            {micError && <div className="sd-alert">{micError}</div>}
-          </section>
+      <div className="card mb-3"><div className="card-body text-center">
+        <button type="button" className={"btn btn-lg sd-listen " + (listening ? "btn-danger" : "btn-primary")} onClick={listening ? stopListening : startListening}>
+          {listening ? "Stop" : "Listen"}
+        </button>
+        <p className="mt-3 mb-0" aria-live="polite">{statusText}</p>
+        {listening && signal != null && <p className="small text-body-secondary mb-0">Signal: {signal} dB above background noise</p>}
+        {micError && <div className="alert alert-danger mt-3 mb-0">{micError}</div>}
+      </div></div>
 
-          <section className={"sd-panel sd-result" + (lastResult && lastResult.ok === true ? " ok" : lastResult && lastResult.ok === false ? " failed" : "")} aria-live="polite">
-            {!lastResult && (<><div className="sd-result-title">No message yet</div><p className="sd-result-sub">Press Send on the other device. Keep this screen on while you wait.</p></>)}
-            {lastResult && lastResult.ok === null && (
-              <>
-                <div className="sd-result-title">Receiving…</div>
-                {theme === "motion"
-                  ? <div className="sd-tonedots" aria-label={symbols + " tones so far"}>{Array.from({ length: Math.min(symbols, 260) }, (_, i) => <i key={i} />)}</div>
-                  : <p className="sd-result-sub tnum">{symbols} tones so far</p>}
-              </>
-            )}
-            {lastResult && lastResult.ok === true && <div className="sd-reveal" key={lastResult.info.ms}><MessageCard message={lastResult.message} info={lastResult.info} /></div>}
-            {lastResult && lastResult.ok === false && (<><div className="sd-result-title sd-bad">Message not received</div><p className="sd-result-sub">{lastResult.error} Ask the sender to try again, a little closer or louder.</p></>)}
-          </section>
+      <div className="card mb-3" aria-live="polite"><div className="card-body">
+        {!result && <p className="text-body-secondary mb-0">No message yet. Press Send on the other device.</p>}
+        {result && result.ok === null && <p className="mb-0">Receiving… {tones} tones so far</p>}
+        {result && result.ok === true && <MessageCard message={result.message} info={result.info} />}
+        {result && result.ok === false && <p className="text-danger mb-0"><strong>Message not received.</strong> {result.error} Ask the sender to try again, a little closer or louder.</p>}
+      </div></div>
 
-          <SignalReadout signal={listening ? signal : null} symbols={symbols} rate={sampleRate && listening ? Math.round(sampleRate / 1000) + " kHz" : null} />
+      <div className="card mb-3"><div className="card-body">
+        <h2 className="h6">Live spectrum</h2>
+        <SpectrumView getAnalyser={analyser} active={listening} />
+        <div className="form-text">Shaded: the Audible (1.5–4 kHz) and Silent (17.5–19.2 kHz) bands. A message shows as a peak hopping inside a band.</div>
+      </div></div>
+
+      <div className="card"><div className="card-body">
+        <div className="d-flex justify-content-between align-items-center">
+          <h2 className="h6 mb-0">Inbox ({inbox.length})</h2>
+          {inbox.length > 0 && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={clearInbox}>Clear</button>}
         </div>
-
-        <div className="sd-stack">
-          <details className="sd-panel sd-details" open={specOpen} onToggle={(e) => setSpecOpen(e.currentTarget.open)}>
-            <summary><span className="sd-h2">Live spectrum</span></summary>
-            <SpectrumView getAnalyser={analyser} active={listening && specOpen} height={200} />
-            <p className="sd-hint">Shaded bands are the Audible (1.5–4 kHz) and Silent (17.5–19.2 kHz) ranges. A message shows up as a peak hopping inside a band.</p>
-          </details>
-          <InboxTable items={inbox} onClear={clearInbox} />
-        </div>
-      </div>
-      <div className="sd-after"><LogPanel page="receive" /></div>
+        {inbox.length === 0 && <p className="text-body-secondary small mt-2 mb-0">Received messages are listed here.</p>}
+        <ul className="list-group list-group-flush mt-2">
+          {inbox.map((m) => (
+            <li key={m.id} className="list-group-item px-0">
+              <div className="d-flex justify-content-between small text-body-secondary">
+                <span>{formatLabel(m.message.format)} · {MODES[m.info.mode].label}</span>
+                <span>{m.at.toLocaleTimeString()}</span>
+              </div>
+              <div className="text-break">{summary(m.message)}</div>
+            </li>
+          ))}
+        </ul>
+      </div></div>
     </div>
   );
 }
