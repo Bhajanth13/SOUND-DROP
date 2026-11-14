@@ -1,14 +1,12 @@
-import { safeHref, formatLabel } from "../lib/formats.js";
+import { formatLabel } from "../lib/formats.js";
 import { MODES } from "../lib/modem.js";
 
 // Shows one received message according to its format.
 export default function MessageCard({ message: m, info }) {
-  const href = m.format === "link" ? safeHref(m.url) : null;   // only http(s) links are clickable
   return (
     <div>
       <span className="badge text-bg-success mb-2">Received: {formatLabel(m.format)}</span>
       {m.format === "text" && <p className="fs-5 mb-2 text-break">{m.text}</p>}
-      {m.format === "link" && <p className="fs-5 mb-2 text-break">{href ? <a href={href} target="_blank" rel="noopener noreferrer">{m.url}</a> : m.url}</p>}
       {m.format === "contact" && (
         <dl className="row mb-2">
           <dt className="col-4">Name</dt><dd className="col-8">{m.name}</dd>

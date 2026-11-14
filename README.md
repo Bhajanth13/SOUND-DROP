@@ -1,6 +1,6 @@
 # SoundDrop
 
-Share short messages, links and contact cards with nearby devices using only sound.
+Share short messages and contact cards with nearby devices using only sound.
 No internet, Wi-Fi, Bluetooth or pairing.
 
 One device plays the message as a quick series of tones; every nearby device that is listening
@@ -14,7 +14,7 @@ Bhajanth V (2RUA26CSE0021), B.Tech CSE, Section A. Guide: Soujanya K V.
 
 ## Features
 
-- **Send** text, a link or a contact card, with form validation and a 120-byte limit
+- **Send** text or a contact card, with form validation and a 120-byte limit
 - **Audible** (1,500–4,038 Hz) and **Silent** (17,500–19,192 Hz) modes
 - **Receive** with automatic mode detection, a live frequency spectrum and an inbox
 - **Works offline and installs as an app** (Service Worker + web app manifest)

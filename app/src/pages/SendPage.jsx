@@ -49,7 +49,6 @@ export default function SendPage() {
         <Choice name="format" options={FORMATS} value={format} onChange={(f) => { setFormat(f); setTried(false); }} />
 
         {format === "text" && <Field as="textarea" id="text" label="Message" rows={3} value={v.text} onChange={set("text")} error={err("text")} />}
-        {format === "link" && <Field id="url" label="Web address" type="url" value={v.url} onChange={set("url")} error={err("url")} placeholder="https://example.com" />}
         {format === "contact" && (
           <>
             <Field id="name" label="Name" value={v.name} onChange={set("name")} error={err("name")} />
