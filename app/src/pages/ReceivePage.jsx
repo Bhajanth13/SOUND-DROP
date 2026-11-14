@@ -19,7 +19,7 @@ export default function ReceivePage() {
           {listening ? "Stop" : "Listen"}
         </button>
         <p className="mt-3 mb-0" aria-live="polite">{statusText}</p>
-        {listening && signal != null && <p className="small text-body-secondary mb-0">Signal: {signal} dB above background noise</p>}
+        {listening && <p className="small text-body-secondary mb-0">{signal > 3 ? "Signal: " + signal + " dB above background noise" : "No tones heard yet"}</p>}
         {micError && <div className="alert alert-danger mt-3 mb-0">{micError}</div>}
       </div></div>
 
