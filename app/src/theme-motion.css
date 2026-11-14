@@ -1,0 +1,140 @@
+/* Motion: minimal, with sound you can see.
+   Classic's layout made quieter (no borders, soft panels, pill buttons, one
+   signal blue) so that the only lively thing on screen is the sound itself:
+   the Send button turns into moving sound bars, the Listen button glows with
+   the microphone level, every received tone drops in as a dot, and the home
+   diagram plays "Hi" tone by tone. Motion always answers something that is
+   happening; nothing moves for decoration. */
+[data-sd-theme="motion"] {
+  --sd-bg: #ffffff;
+  --sd-surface: #f3f5fa;
+  --sd-surface-2: #e9edf6;
+  --sd-ink: #141821;
+  --sd-muted: #5d6474;
+  --sd-line: #e2e6ef;
+  --sd-accent: #2f5bea;
+  --sd-accent-ink: #ffffff;
+  --sd-accent-dark: #1f45c4;
+  --sd-accent-light: #a9bcff;
+  --sd-select: rgba(47, 91, 234, 0.1);
+  --sd-band: rgba(47, 91, 234, 0.09);
+  --sd-fill: rgba(47, 91, 234, 0.14);
+  --sd-grid: #e4e8f1;
+  --sd-axis: #6b7282;
+  --sd-ok: #1f8a5b;
+  --sd-ok-bg: rgba(31, 138, 91, 0.08);
+  --sd-warn: #b26a00;
+  --sd-bad: #c93a3a;
+  --sd-radius: 22px;
+  --sd-radius-sm: 14px;
+  --sd-shadow: none;
+}
+[data-sd-theme="motion"][data-bs-theme="dark"] {
+  --sd-bg: #0c0e13;
+  --sd-surface: #161a22;
+  --sd-surface-2: #1e2430;
+  --sd-ink: #eef1f7;
+  --sd-muted: #9aa2b4;
+  --sd-line: #262c38;
+  --sd-accent: #6f8dff;
+  --sd-accent-ink: #0b1230;
+  --sd-accent-dark: #8ea6ff;
+  --sd-accent-light: #3b4f9c;
+  --sd-select: rgba(111, 141, 255, 0.16);
+  --sd-band: rgba(111, 141, 255, 0.12);
+  --sd-fill: rgba(111, 141, 255, 0.18);
+  --sd-grid: #222836;
+  --sd-axis: #9aa2b4;
+  --sd-ok: #4cc58e;
+  --sd-ok-bg: rgba(76, 197, 142, 0.1);
+  --sd-bad: #f07272;
+}
+
+/* quiet surfaces: no borders, soft fills, generous rounding */
+[data-sd-theme="motion"] .sd-top,
+[data-sd-theme="motion"] .sd-tabbar { background: color-mix(in srgb, var(--sd-bg) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-color: var(--sd-line); }
+[data-sd-theme="motion"] .sd-panel,
+[data-sd-theme="motion"] .sd-steps li,
+[data-sd-theme="motion"] .sd-art,
+[data-sd-theme="motion"] .sd-readout,
+[data-sd-theme="motion"] .sd-inbox-list li { border-color: transparent; background: var(--sd-surface); }
+[data-sd-theme="motion"] .sd-display { font-size: clamp(2rem, 7.6vw, 3.5rem); letter-spacing: -0.04em; }
+[data-sd-theme="motion"] .sd-page-head h1 { letter-spacing: -0.035em; }
+[data-sd-theme="motion"] .sd-send-btn,
+[data-sd-theme="motion"] .sd-btn-ghost,
+[data-sd-theme="motion"] .sd-chip { border-radius: 999px; }
+[data-sd-theme="motion"] .sd-btn-ghost { background: var(--sd-surface); border-color: transparent; }
+[data-sd-theme="motion"] .sd-seg { border-color: transparent; background: var(--sd-surface-2); border-radius: 999px; }
+[data-sd-theme="motion"] .sd-seg-btn { border-radius: 999px; }
+[data-sd-theme="motion"] .form-control, [data-sd-theme="motion"] .form-select { border-color: transparent; background-color: var(--sd-surface); border-radius: 14px; }
+[data-sd-theme="motion"] .sd-actionbar { background: color-mix(in srgb, var(--sd-bg) 92%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: none; }
+@media (min-width: 768px) {
+  [data-sd-theme="motion"] .sd-actionbar { background: var(--sd-surface); border-color: transparent; }
+}
+[data-sd-theme="motion"] .sd-spectrum { border-color: transparent; background: var(--sd-surface-2); }
+[data-sd-theme="motion"] .sd-tab.active .sd-tab-icon { background: var(--sd-accent); color: var(--sd-accent-ink); }
+
+/* every press gives a small physical response */
+[data-sd-theme="motion"] .sd-send-btn,
+[data-sd-theme="motion"] .sd-btn-ghost,
+[data-sd-theme="motion"] .sd-chip,
+[data-sd-theme="motion"] .sd-seg-btn,
+[data-sd-theme="motion"] .sd-listen { transition: transform 0.12s ease, background-color 0.2s ease, color 0.2s ease; }
+[data-sd-theme="motion"] .sd-send-btn:active,
+[data-sd-theme="motion"] .sd-btn-ghost:active,
+[data-sd-theme="motion"] .sd-chip:active,
+[data-sd-theme="motion"] .sd-seg-btn:active { transform: scale(0.96); }
+[data-sd-theme="motion"] .sd-listen:active { transform: scale(0.95); }
+
+/* pages ease in when you switch tabs */
+[data-sd-theme="motion"] .sd-page { animation: sd-mo-page 0.24s ease-out; }
+@keyframes sd-mo-page { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Send: the button becomes moving sound bars with ripples ---------- */
+.sd-wavebars { display: none; }
+[data-sd-theme="motion"] .sd-send-btn.stop { position: relative; background: var(--sd-accent); color: var(--sd-accent-ink); box-shadow: none; gap: 10px; overflow: visible; }
+[data-sd-theme="motion"] .sd-send-btn.stop::before,
+[data-sd-theme="motion"] .sd-send-btn.stop::after { content: ""; position: absolute; inset: 0; border-radius: inherit; border: 2px solid var(--sd-accent); animation: sd-mo-ripple 1.4s ease-out infinite; pointer-events: none; }
+[data-sd-theme="motion"] .sd-send-btn.stop::after { animation-delay: 0.7s; }
+@keyframes sd-mo-ripple { from { transform: scale(1); opacity: 0.6; } to { transform: scale(1.12, 1.6); opacity: 0; } }
+[data-sd-theme="motion"] .sd-wavebars { display: inline-flex; align-items: center; gap: 3px; height: 22px; }
+[data-sd-theme="motion"] .sd-wavebars i { display: block; width: 4px; height: 100%; border-radius: 2px; background: currentColor; animation: sd-mo-bar 0.9s ease-in-out infinite; transform-origin: center; }
+[data-sd-theme="motion"] .sd-wavebars i:nth-child(2) { animation-delay: -0.6s; }
+[data-sd-theme="motion"] .sd-wavebars i:nth-child(3) { animation-delay: -0.3s; }
+[data-sd-theme="motion"] .sd-wavebars i:nth-child(4) { animation-delay: -0.75s; }
+[data-sd-theme="motion"] .sd-wavebars i:nth-child(5) { animation-delay: -0.15s; }
+@keyframes sd-mo-bar { 0%, 100% { transform: scaleY(0.25); } 50% { transform: scaleY(1); } }
+[data-sd-theme="motion"] .sd-progress > i { background: linear-gradient(90deg, var(--sd-accent-light), var(--sd-accent)); }
+
+/* ---------- Receive: the Listen button glows with the microphone level ---------- */
+.sd-listen-glow { display: none; }
+[data-sd-theme="motion"] .sd-listen { background: var(--sd-accent); box-shadow: none; overflow: visible; }
+[data-sd-theme="motion"] .sd-listen.idle,
+[data-sd-theme="motion"] .sd-listen.receiving { background: var(--sd-surface-2); color: var(--sd-accent-dark); box-shadow: none; }
+[data-sd-theme="motion"] .sd-listen-glow { display: block; position: absolute; inset: 14%; border-radius: 50%; background: var(--sd-accent); opacity: calc(0.12 + var(--lvl, 0) * 0.55); transform: scale(calc(0.72 + var(--lvl, 0) * 0.45)); transition: transform 0.15s ease-out, opacity 0.15s ease-out; }
+[data-sd-theme="motion"] .sd-listen.off .sd-listen-glow { opacity: 0; }
+[data-sd-theme="motion"] .sd-listen.receiving .sd-listen-glow { background: var(--sd-warn); }
+[data-sd-theme="motion"] .sd-listen-rings i { border-color: var(--sd-accent-light); }
+
+/* every tone that arrives drops in as a dot */
+.sd-tonedots { display: flex; flex-wrap: wrap; gap: 5px; min-height: 12px; }
+.sd-tonedots i { width: 8px; height: 8px; border-radius: 50%; background: var(--sd-accent); animation: sd-mo-drop 0.32s cubic-bezier(0.3, 1.5, 0.6, 1); }
+@keyframes sd-mo-drop { from { transform: translateY(-14px) scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* the message arrives with one soft pulse */
+[data-sd-theme="motion"] .sd-reveal { animation: sd-mo-reveal 0.42s cubic-bezier(0.2, 1.2, 0.4, 1); }
+@keyframes sd-mo-reveal { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+[data-sd-theme="motion"] .sd-result.ok { background: var(--sd-ok-bg); border-color: transparent; animation: sd-mo-pulse 0.9s ease-out; }
+@keyframes sd-mo-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sd-ok) 45%, transparent); } 100% { box-shadow: 0 0 0 18px transparent; } }
+
+/* ---------- Home: "Hi" plays tone by tone ---------- */
+.sd-art-motion .sd-mo-tone { fill: var(--sd-accent); transform-box: fill-box; transform-origin: center; }
+.sd-art-motion .sd-mo-tone.mark { fill: var(--sd-axis); }
+.sd-art-motion .sd-mo-ring { fill: none; stroke: var(--sd-accent); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.sd-art-motion .sd-mo-playhead { stroke: var(--sd-accent-dark); stroke-width: 1.5; opacity: 0; }
+[data-sd-theme="motion"] .sd-art-motion .sd-mo-tone { animation: sd-mo-pop 3.6s ease-out var(--d) 3 backwards; }
+[data-sd-theme="motion"] .sd-art-motion .sd-mo-ring { animation: sd-mo-ring 3.6s ease-out var(--d) 3; }
+[data-sd-theme="motion"] .sd-art-motion .sd-mo-playhead { animation: sd-mo-play 3.6s linear 3; }
+@keyframes sd-mo-pop { 0% { transform: scale(1.5); opacity: 1; } 10% { transform: scale(1); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes sd-mo-ring { 0% { transform: scale(1); opacity: 0.7; } 22% { transform: scale(3.4); opacity: 0; } 100% { opacity: 0; } }
+@keyframes sd-mo-play { 0% { transform: translateX(0); opacity: 0.9; } 93% { transform: translateX(284px); opacity: 0.9; } 100% { transform: translateX(284px); opacity: 0; } }

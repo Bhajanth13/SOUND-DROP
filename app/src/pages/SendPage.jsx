@@ -121,6 +121,7 @@ export default function SendPage() {
           <div className="sd-actionbar">
             <div className="sd-actionbar-inner">
               <button type="submit" className={"sd-send-btn" + (sending ? " stop" : "")} disabled={!sending && touched && !valid}>
+                {sending && <span className="sd-wavebars" aria-hidden="true"><i /><i /><i /><i /><i /></span>}
                 {sending ? "Stop sending" : "Send through sound"}
               </button>
               <div className="sd-meter sd-progress" aria-hidden="true"><i style={{ width: (sending ? sending.progress * 100 : 0) + "%" }} /></div>

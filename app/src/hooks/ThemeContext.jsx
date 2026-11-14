@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 export const THEMES = [
   { id: "classic", label: "Classic", hint: "Clean and simple" },
+  { id: "motion", label: "Motion", hint: "Minimal, with sound you can see" },
   { id: "steampunk", label: "Steampunk", hint: "Brass, rivets and parchment" },
   { id: "isometric", label: "Isometric", hint: "3-D blocks on a desk" }
 ];
@@ -34,7 +35,7 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     document.documentElement.setAttribute("data-sd-theme", theme);
     try { localStorage.setItem("sd-theme", theme); } catch (e) {}
-    const color = { classic: "#0d8566", steampunk: "#2a1d14", isometric: "#eef1f7" }[theme];
+    const color = { classic: "#0d8566", motion: "#ffffff", steampunk: "#2a1d14", isometric: "#eef1f7" }[theme];
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", color);
   }, [theme]);

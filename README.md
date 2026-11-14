@@ -19,7 +19,7 @@ Bhajanth V (RVUM26CSE062), B.Tech CSE, Section A. Guide: Soujanya K V.
 - **Receive** with automatic mode detection, a live frequency spectrum and an inbox table
 - **Range Test Lab**: a 14–21 kHz sweep test that shows which frequencies a speaker and microphone pair can use
 - **Works offline** after the first visit (Service Worker)
-- Three designs, chosen from the top bar: **Classic**, **Steampunk** (brass, rivets and parchment, with a needle gauge) and **Isometric** (3-D blocks, isometric spectrum bars). `?theme=steampunk` or `?theme=isometric` opens one directly
+- Four designs, chosen from the top bar: **Classic**, **Motion** (minimal; the Send button becomes moving sound bars, the Listen button glows with the microphone level, each received tone drops in as a dot), **Steampunk** (brass, rivets and parchment, with a needle gauge) and **Isometric** (3-D blocks, isometric spectrum bars). `?theme=motion`, `?theme=steampunk` or `?theme=isometric` opens one directly
 - Phone-first layout: bottom tab bar, Send button pinned above it, one big Listen button, inbox as cards
 - Classic follows the phone's light or dark setting
 - Test log on every page, saved as a .txt file for comparing devices
@@ -50,7 +50,7 @@ app/                     React source (Vite project)
   src/components/        NavBar, TabBar, ThemePicker, HeroArt, ModeSettings, Field, MessageCard,
                          InboxTable, SpectrumView, SignalReadout, LogPanel
   src/index.css          phone-first layout and the Classic design
-  src/theme-*.css        Steampunk and Isometric designs
+  src/theme-*.css        Motion, Steampunk and Isometric designs
   src/lib/modem.js       encoder, transmitter and receiver (MFSK modem)
   src/lib/formats.js     message formats and validation
   public/sw.js           Service Worker

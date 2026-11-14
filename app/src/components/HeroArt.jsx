@@ -7,6 +7,7 @@ export default function HeroArt() {
   const { theme } = useTheme();
   if (theme === "steampunk") return <SteamArt />;
   if (theme === "isometric") return <IsoArt />;
+  if (theme === "motion") return <MotionArt />;
   return <ClassicArt />;
 }
 
@@ -124,6 +125,32 @@ function IsoArt() {
         </g>
       </svg>
       <figcaption>Each cube is one tone: the laptop plays them, the phone hears them and rebuilds the message.</figcaption>
+    </figure>
+  );
+}
+
+// ---------- Motion: a playhead plays "Hi" tone by tone, rings spread from each tone ----------
+function MotionArt() {
+  const w = 320, h = 210, pad = 18, cw = (w - pad * 2) / HI.length;
+  const y = (t) => h - 34 - (t / 18) * (h - 70);
+  const step = 0.28;                                   // seconds per tone in the animation
+  return (
+    <figure className="sd-art sd-art-motion">
+      <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label="The text Hi played as tones, one after another">
+        <line x1={pad} y1={h - 22} x2={w - pad} y2={h - 22} className="sd-axis" />
+        {HI.map((t, i) => {
+          const cx = pad + i * cw + cw / 2;
+          return (
+            <g key={i} style={{ "--d": (i * step) + "s" }}>
+              <circle cx={cx} cy={y(t)} r="5" className="sd-mo-ring" />
+              <rect x={pad + i * cw + 3} y={y(t) - 5} width={cw - 6} height={10} rx={5} className={"sd-mo-tone" + (t >= 17 ? " mark" : "")} />
+            </g>
+          );
+        })}
+        <line className="sd-mo-playhead" x1={pad} y1={14} x2={pad} y2={h - 22} style={{ "--run": (HI.length * step) + "s" }} />
+        <text x={pad} y={h - 6} className="sd-axis-label">time</text>
+      </svg>
+      <figcaption>"Hi" played as SoundDrop tones, one tone every few hundredths of a second.</figcaption>
     </figure>
   );
 }

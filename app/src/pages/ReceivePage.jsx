@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTheme } from "../hooks/ThemeContext.jsx";
 import { useSoundDrop } from "../hooks/SoundDropContext.jsx";
 import { MODES } from "../lib/modem.js";
 import MessageCard from "../components/MessageCard.jsx";
@@ -12,6 +13,8 @@ const wide = () => typeof window !== "undefined" && window.matchMedia("(min-widt
 export default function ReceivePage() {
   const { listening, startListening, stopListening, rxStatus, rxMode, symbols, signal, lastResult, inbox, clearInbox, micError, sampleRate, analyser } = useSoundDrop();
   const [specOpen, setSpecOpen] = useState(wide);
+  const { theme } = useTheme();
+  const level = listening && signal != null ? Math.max(0, Math.min(1, (signal - 6) / 40)) : 0;   // 0..1 for the glow
 
   const state = !listening ? "off" : rxStatus === "receiving" ? "receiving" : "idle";
   const statusText = state === "off" ? "Tap to start listening"
@@ -28,8 +31,9 @@ export default function ReceivePage() {
       <div className="sd-grid-2">
         <div className="sd-stack">
           <section className="sd-panel sd-listen-panel">
-            <button type="button" className={"sd-listen " + state} onClick={() => (listening ? stopListening() : startListening())} aria-pressed={listening}>
+            <button type="button" style={{ "--lvl": level }} className={"sd-listen " + state} onClick={() => (listening ? stopListening() : startListening())} aria-pressed={listening}>
               <span className="sd-listen-rings" aria-hidden="true"><i /><i /><i /></span>
+              <span className="sd-listen-glow" aria-hidden="true" />
               <span className="sd-listen-label">{listening ? "Stop" : "Listen"}</span>
             </button>
             <p className="sd-listen-status" aria-live="polite">{statusText}</p>
@@ -38,8 +42,15 @@ export default function ReceivePage() {
 
           <section className={"sd-panel sd-result" + (lastResult && lastResult.ok === true ? " ok" : lastResult && lastResult.ok === false ? " failed" : "")} aria-live="polite">
             {!lastResult && (<><div className="sd-result-title">No message yet</div><p className="sd-result-sub">Press Send on the other device. Keep this screen on while you wait.</p></>)}
-            {lastResult && lastResult.ok === null && (<><div className="sd-result-title">Receiving…</div><p className="sd-result-sub tnum">{symbols} tones so far</p></>)}
-            {lastResult && lastResult.ok === true && <MessageCard message={lastResult.message} info={lastResult.info} />}
+            {lastResult && lastResult.ok === null && (
+              <>
+                <div className="sd-result-title">Receiving…</div>
+                {theme === "motion"
+                  ? <div className="sd-tonedots" aria-label={symbols + " tones so far"}>{Array.from({ length: Math.min(symbols, 260) }, (_, i) => <i key={i} />)}</div>
+                  : <p className="sd-result-sub tnum">{symbols} tones so far</p>}
+              </>
+            )}
+            {lastResult && lastResult.ok === true && <div className="sd-reveal" key={lastResult.info.ms}><MessageCard message={lastResult.message} info={lastResult.info} /></div>}
             {lastResult && lastResult.ok === false && (<><div className="sd-result-title sd-bad">Message not received</div><p className="sd-result-sub">{lastResult.error} Ask the sender to try again, a little closer or louder.</p></>)}
           </section>
 

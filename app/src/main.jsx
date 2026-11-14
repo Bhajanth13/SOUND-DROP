@@ -7,6 +7,7 @@ import "@fontsource/crimson-pro/latin-600.css";
 import "@fontsource/special-elite/latin-400.css";
 import "@fontsource-variable/archivo/wdth.css";
 import "./index.css";
+import "./theme-motion.css";
 import "./theme-steampunk.css";
 import "./theme-isometric.css";
 import App from "./App.jsx";

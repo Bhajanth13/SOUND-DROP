@@ -39,6 +39,14 @@ export default function ThemePicker() {
 
 // tiny preview of each design
 function Swatch({ id }) {
+  if (id === "motion") return (
+    <svg className="sd-swatch" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="11" fill="#2f5bea" />
+      <circle cx="12" cy="12" r="7.5" fill="none" stroke="#fff" strokeWidth="1.2" opacity=".45" />
+      <rect x="6.5" y="10" width="2" height="4" rx="1" fill="#fff" /><rect x="9.5" y="7.5" width="2" height="9" rx="1" fill="#fff" />
+      <rect x="12.5" y="9" width="2" height="6" rx="1" fill="#fff" /><rect x="15.5" y="10.5" width="2" height="3" rx="1" fill="#fff" />
+    </svg>
+  );
   if (id === "steampunk") return (
     <svg className="sd-swatch" viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="11" fill="#b8873b" /><circle cx="12" cy="12" r="7.5" fill="#efe2c4" stroke="#6b4a1f" strokeWidth="1" />
