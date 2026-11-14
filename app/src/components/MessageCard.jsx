@@ -9,12 +9,6 @@ export default function MessageCard({ message: m, info }) {
       <span className="badge text-bg-success mb-2">Received: {formatLabel(m.format)}</span>
       {m.format === "text" && <p className="fs-5 mb-2 text-break">{m.text}</p>}
       {m.format === "link" && <p className="fs-5 mb-2 text-break">{href ? <a href={href} target="_blank" rel="noopener noreferrer">{m.url}</a> : m.url}</p>}
-      {m.format === "wifi" && (
-        <dl className="row mb-2">
-          <dt className="col-4">Network</dt><dd className="col-8">{m.ssid}</dd>
-          <dt className="col-4">Password</dt><dd className="col-8 font-monospace text-break">{m.security === "nopass" ? "None (open)" : m.password}</dd>
-        </dl>
-      )}
       {m.format === "contact" && (
         <dl className="row mb-2">
           <dt className="col-4">Name</dt><dd className="col-8">{m.name}</dd>

@@ -50,16 +50,6 @@ export default function SendPage() {
 
         {format === "text" && <Field as="textarea" id="text" label="Message" rows={3} value={v.text} onChange={set("text")} error={err("text")} />}
         {format === "link" && <Field id="url" label="Web address" type="url" value={v.url} onChange={set("url")} error={err("url")} placeholder="https://example.com" />}
-        {format === "wifi" && (
-          <>
-            <Field id="ssid" label="Network name" value={v.ssid} onChange={set("ssid")} error={err("ssid")} />
-            <Field as="select" id="security" label="Security" value={v.security} onChange={set("security")}>
-              <option value="WPA">WPA / WPA2</option>
-              <option value="nopass">None (open network)</option>
-            </Field>
-            {v.security !== "nopass" && <Field id="password" label="Password" value={v.password} onChange={set("password")} error={err("password")} autoComplete="off" />}
-          </>
-        )}
         {format === "contact" && (
           <>
             <Field id="name" label="Name" value={v.name} onChange={set("name")} error={err("name")} />

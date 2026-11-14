@@ -1,7 +1,7 @@
 {
   "name": "SoundDrop",
   "short_name": "SoundDrop",
-  "description": "Share short messages, links, Wi-Fi details and contact cards with nearby devices using only sound. No internet, Wi-Fi or Bluetooth.",
+  "description": "Share short messages, links and contact cards with nearby devices using only sound. No internet, Wi-Fi or Bluetooth.",
   "id": "./",
   "start_url": "./#/",
   "scope": "./",

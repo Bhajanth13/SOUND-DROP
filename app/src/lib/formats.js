@@ -5,7 +5,6 @@
 // ASCII unit separator (0x1F), which people cannot type by accident.
 //   T:<text>
 //   L:<url>
-//   W:<network name>␟<password>␟<security>
 //   C:<name>␟<phone>␟<email>
 
 import { MAX_BYTES } from "./modem.js";
@@ -15,14 +14,12 @@ export const SEP = "\u001f";
 export const FORMATS = [
   { id: "text", code: "T", label: "Text", hint: "A short sentence or note" },
   { id: "link", code: "L", label: "Link", hint: "A web address to open" },
-  { id: "wifi", code: "W", label: "Wi-Fi", hint: "Network name and password" },
   { id: "contact", code: "C", label: "Contact card", hint: "Name, phone and email" }
 ];
 
 export const EMPTY = {
   text: { text: "" },
   link: { url: "" },
-  wifi: { ssid: "", password: "", security: "WPA" },
   contact: { name: "", phone: "", email: "" }
 };
 
@@ -32,7 +29,6 @@ export function pack(format, v) {
   switch (format) {
     case "text": return "T:" + v.text.trim();
     case "link": return "L:" + v.url.trim();
-    case "wifi": return "W:" + [v.ssid.trim(), v.security === "nopass" ? "" : v.password, v.security].join(SEP);
     case "contact": return "C:" + [v.name.trim(), v.phone.trim(), v.email.trim()].join(SEP);
     default: throw new Error("Unknown format");
   }
@@ -55,15 +51,6 @@ export function validate(format, v) {
       } catch (err) { e.url = "That is not a complete web address. Include https:// at the start."; }
     }
   }
-  if (format === "wifi") {
-    const n = v.ssid.trim().length;
-    if (!n) e.ssid = "Enter the network name.";
-    else if (n > 32) e.ssid = "Network names can be at most 32 characters.";
-    if (v.security !== "nopass") {
-      if (v.password.length < 8) e.password = "Wi-Fi passwords are at least 8 characters.";
-      else if (v.password.length > 63) e.password = "Wi-Fi passwords are at most 63 characters.";
-    }
-  }
   if (format === "contact") {
     const nm = v.name.trim();
     if (nm.length < 2) e.name = "Enter a name of at least 2 letters.";
@@ -82,10 +69,6 @@ export function unpack(raw) {
   const code = raw.slice(0, 2), body = raw.slice(2);
   if (code === "T:") return { format: "text", text: body };
   if (code === "L:") return { format: "link", url: body };
-  if (code === "W:") {
-    const [ssid = "", password = "", security = "WPA"] = body.split(SEP);
-    return { format: "wifi", ssid, password, security };
-  }
   if (code === "C:") {
     const [name = "", phone = "", email = ""] = body.split(SEP);
     return { format: "contact", name, phone, email };
@@ -96,7 +79,6 @@ export function unpack(raw) {
 // One line summary for the inbox table.
 export function summary(m) {
   if (m.format === "link") return m.url;
-  if (m.format === "wifi") return "Wi-Fi: " + m.ssid;
   if (m.format === "contact") return "Contact: " + m.name;
   return m.text;
 }

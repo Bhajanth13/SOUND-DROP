@@ -2,7 +2,7 @@ import { MODES, NUM_TONES, toneHz } from "../lib/modem.js";
 import InstallApp from "../components/InstallApp.jsx";
 
 const STEPS = [
-  ["Type", "a message, a link, Wi-Fi details or a contact card."],
+  ["Type", "a message, a link or a contact card."],
   ["Encode", "every 4 bits become one of 16 tones, with a start tone, a checksum and an end tone."],
   ["Play", "the speaker plays the tones. In Silent mode they are above 17.5 kHz."],
   ["Decode", "every listening device runs an FFT on its microphone, checks the checksum and shows the message."]
