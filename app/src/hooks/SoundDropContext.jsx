@@ -18,7 +18,11 @@ export const TEST = {
   wet: parseFloat(params.get("wet") || "1"),
   engine: params.get("engine") || "worklet",
   fftN: params.has("fftN") ? +params.get("fftN") : null,
-  noise: parseFloat(params.get("noise") || "0")
+  noise: parseFloat(params.get("noise") || "0"),
+  lp: parseFloat(params.get("lp") || "0"),          // speaker roll-off: low-pass cutoff in Hz
+  ripple: parseFloat(params.get("ripple") || "0")   // speaker unevenness: random dips/peaks in dB
+  ,repeat: params.has("repeat") ? +params.get("repeat") : null   // force number of copies (tests only)
+  ,det: params.has("det") ? JSON.parse(params.get("det")) : null   // detector settings override (tests only)
 };
 
 export function SoundDropProvider({ children }) {
@@ -43,6 +47,7 @@ export function SoundDropProvider({ children }) {
   const [engine, setEngine] = useState(null);
   const [logLines, setLogLines] = useState([]);
   const logRef = useRef([]);
+  const lastOkRef = useRef(null);
 
   const log = useCallback((kind, ...f) => {
     if (logRef.current.length > 20000) return;
@@ -69,14 +74,28 @@ export function SoundDropProvider({ children }) {
   const getLoopOut = useCallback(() => {
     if (loopOutRef.current) return loopOutRef.current;
     const c = audio(), out = c.createGain();
-    getLoopIn().connect(out);
+    // simulated phone speaker: roll-off above lp Hz and random dips/peaks across the high band
+    let spk = getLoopIn();
+    if (TEST.lp > 0) {
+      for (let k = 0; k < 2; k++) { const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = TEST.lp; f.Q.value = 0.7; spk.connect(f); spk = f; }
+    }
+    if (TEST.ripple > 0) {
+      for (let k = 0; k < 4; k++) {
+        const f = c.createBiquadFilter(); f.type = "peaking";
+        f.frequency.value = 14000 + Math.random() * 6000; f.Q.value = 4 + Math.random() * 6;
+        f.gain.value = (Math.random() * 2 - 1) * TEST.ripple;
+        spk.connect(f); spk = f;
+      }
+    }
+    const speaker = spk;
+    speaker.connect(out);
     if (TEST.reverb > 0) {
       const len = Math.floor(c.sampleRate * TEST.reverb * 1.5), ir = c.createBuffer(1, len, c.sampleRate), d = ir.getChannelData(0);
       const delay = Math.floor(c.sampleRate * 0.004);
       for (let i = delay; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(10, -3 * (i - delay) / (c.sampleRate * TEST.reverb));
       const conv = c.createConvolver(); conv.normalize = true; conv.buffer = ir;
       const wet = c.createGain(); wet.gain.value = TEST.wet;
-      getLoopIn().connect(conv).connect(wet).connect(out);
+      speaker.connect(conv).connect(wet).connect(out);
     }
     if (TEST.noise > 0) {   // simulated background noise of a room
       const len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
@@ -95,15 +114,15 @@ export function SoundDropProvider({ children }) {
     setSending(null);
   }, []);
 
-  const send = useCallback((text, { mode, speed, volume }) => {
+  const send = useCallback((text, { mode, speed, volume, repeat = 1 }) => {
     const c = audio();
     stopSending();
     const out = c.createGain();
     if (!TEST.mute) out.connect(c.destination);
     if (TEST.loopback) out.connect(getLoopIn());
-    const tx = transmit(c, out, text, { mode: MODES[mode], speed: SPEEDS[speed], volume });
+    const tx = transmit(c, out, text, { mode: MODES[mode], speed: SPEEDS[speed], volume, repeat: TEST.repeat || repeat });
     txRef.current = tx;
-    log("SEND_START", mode, speed, "vol " + volume, tx.payloadBytes + " bytes", tx.tones.length + " tones", tx.duration.toFixed(2) + " s", JSON.stringify(text));
+    log("SEND_START", mode, speed, "x" + tx.copies, "vol " + volume, tx.payloadBytes + " bytes", tx.tones.length + " tones", tx.duration.toFixed(2) + " s", JSON.stringify(text));
     log("SEND_TRACE", tx.trace);
     setSending({ progress: 0, bytes: tx.payloadBytes, mode, duration: tx.duration });
     txTimer.current = setInterval(() => {
@@ -181,18 +200,23 @@ export function SoundDropProvider({ children }) {
         setSignal(l && l.snr > -50 ? Math.round(l.snr) : null);
       },
       onMessage(text, info) {
-        log("RX_OK", info.mode, info.bytes + " bytes", info.nibbles + " symbols", (info.ms / 1000).toFixed(2) + " s", "snr " + info.avgSnr.toFixed(1), JSON.stringify(text));
+        log("RX_OK", info.mode, info.bytes + " bytes", info.nibbles + " symbols", (info.ms / 1000).toFixed(2) + " s", "snr " + info.avgSnr.toFixed(1), "repaired " + (info.repaired || 0), JSON.stringify(text));
+        const now = Date.now(), prev = lastOkRef.current;
+        lastOkRef.current = { text, at: now };
+        if (prev && prev.text === text && now - prev.at < 12000) { log("RX_DUPLICATE"); setLastResult((r) => (r && r.ok ? r : { ok: true, message: unpack(text), info })); return; }   // second copy of the same message
         const message = unpack(text);
-        const item = { id: Date.now() + Math.random(), at: new Date(), raw: text, message, info };
+        const item = { id: now + Math.random(), at: new Date(), raw: text, message, info };
         setLastResult({ ok: true, message, info });
         setInbox((list) => [item, ...list]);
       },
       onError(msg, info) {
         log("RX_FAIL", info && info.mode, msg, info && info.nibbles != null ? info.nibbles + " symbols" : "", info && info.avgSnr != null ? "snr " + info.avgSnr.toFixed(1) : "");
         if (info && info.trace) log("RX_TRACE", info.trace);
+        const prev = lastOkRef.current;
+        if (prev && Date.now() - prev.at < 6000) return;          // a copy failed but another copy already arrived
         setLastResult({ ok: false, error: msg, info });
       }
-    }, { engine: TEST.engine, fftN: TEST.fftN });
+    }, { engine: TEST.engine, fftN: TEST.fftN, cfg: TEST.det });
     rx.start();
     rxRef.current = rx;
     setEngine(rx.engine);
