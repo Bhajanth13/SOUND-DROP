@@ -2,7 +2,7 @@
 // The app shell is cached on install. Every later request is answered from the
 // cache straight away and refreshed from the network in the background, so the
 // app opens in airplane mode and still picks up new versions when online.
-const CACHE = "sounddrop-v1.0.0";
+const CACHE = "sounddrop-v1.1.0";
 const SHELL = ["./", "./index.html", "./assets/app.js", "./assets/app.css", "./icon.svg"];
 
 self.addEventListener("install", (event) => {

@@ -6,7 +6,7 @@ export default function MessageCard({ message, info }) {
   const m = message;
   return (
     <div className="sd-message">
-      <span className="badge text-bg-primary sd-format">{formatLabel(m.format)}</span>
+      <span className="sd-tag">{formatLabel(m.format)}</span>
       {m.format === "text" && <p className="sd-message-text">{m.text}</p>}
       {m.format === "link" && (
         <p className="sd-message-text">
@@ -29,7 +29,7 @@ export default function MessageCard({ message, info }) {
       )}
       {info && (
         <div className="sd-message-meta tnum">
-          {MODES[info.mode].label} mode · {info.bytes} bytes · {(info.ms / 1000).toFixed(1)} s · signal {Math.round(info.avgSnr)} dB
+          {MODES[info.mode].label} mode, {info.bytes} bytes in {(info.ms / 1000).toFixed(1)} s, signal {Math.round(info.avgSnr)} dB{info.repaired ? ", " + info.repaired + " tone" + (info.repaired > 1 ? "s" : "") + " repaired" : ""}
         </div>
       )}
     </div>

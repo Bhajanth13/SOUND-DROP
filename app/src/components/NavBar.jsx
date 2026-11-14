@@ -1,51 +1,41 @@
-import { useState } from "react";
 import { useSoundDrop } from "../hooks/SoundDropContext.jsx";
+import ThemePicker from "./ThemePicker.jsx";
 
-const LINKS = [
+export const LINKS = [
   { id: "home", label: "Home", href: "#/" },
   { id: "send", label: "Send", href: "#/send" },
   { id: "receive", label: "Receive", href: "#/receive" },
-  { id: "lab", label: "Range Test Lab", href: "#/lab" },
+  { id: "lab", label: "Range Test Lab", short: "Lab", href: "#/lab" },
   { id: "about", label: "How it works", href: "#/about" }
 ];
 
+// Top bar. On phones it only holds the name, the listening badge and the design
+// picker; page links move to the bottom tab bar.
 export default function NavBar({ route }) {
-  const [open, setOpen] = useState(false);
   const { listening, rxStatus } = useSoundDrop();
   return (
-    <nav className="navbar navbar-expand-md sd-nav sticky-top">
-      <div className="container sd-container">
-        <a className="navbar-brand sd-brand" href="#/" onClick={() => setOpen(false)}>
-          <Logo /> SoundDrop
-        </a>
-        {listening && (
-          <a href="#/receive" className={"badge rounded-pill sd-live ms-auto me-2 d-md-none" + (rxStatus === "receiving" ? " busy" : "")}>
-            {rxStatus === "receiving" ? "Receiving" : "Listening"}
-          </a>
-        )}
-        <button className="navbar-toggler" type="button" aria-controls="sdNav" aria-expanded={open} aria-label="Open menu" onClick={() => setOpen((o) => !o)}>
-          <span className="navbar-toggler-icon"></span>
-        </button>
-        <div id="sdNav" className={"collapse navbar-collapse" + (open ? " show" : "")}>
-          <ul className="navbar-nav ms-auto">
-            {LINKS.map((l) => (
-              <li className="nav-item" key={l.id}>
-                <a className={"nav-link" + (route === l.id ? " active" : "")} aria-current={route === l.id ? "page" : undefined} href={l.href} onClick={() => setOpen(false)}>{l.label}</a>
-              </li>
-            ))}
-          </ul>
+    <header className="sd-top">
+      <div className="sd-top-inner sd-container">
+        <a className="sd-brand" href="#/"><Logo /> <span>SoundDrop</span></a>
+        <nav className="sd-toplinks" aria-label="Pages">
+          {LINKS.map((l) => (
+            <a key={l.id} href={l.href} className={"sd-toplink" + (route === l.id ? " active" : "")} aria-current={route === l.id ? "page" : undefined}>{l.label}</a>
+          ))}
+        </nav>
+        <div className="sd-top-right">
           {listening && (
-            <a href="#/receive" className={"badge rounded-pill sd-live ms-3 d-none d-md-inline-block" + (rxStatus === "receiving" ? " busy" : "")}>
+            <a href="#/receive" className={"sd-live" + (rxStatus === "receiving" ? " busy" : "")}>
               {rxStatus === "receiving" ? "Receiving" : "Listening"}
             </a>
           )}
+          <ThemePicker />
         </div>
       </div>
-    </nav>
+    </header>
   );
 }
 
-export function Logo({ size = 22 }) {
+export function Logo({ size = 24 }) {
   // three sound arcs dropping into a dot
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="sd-logo">

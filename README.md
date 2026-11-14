@@ -19,7 +19,9 @@ Bhajanth V (RVUM26CSE062), B.Tech CSE, Section A. Guide: Soujanya K V.
 - **Receive** with automatic mode detection, a live frequency spectrum and an inbox table
 - **Range Test Lab**: a 14–21 kHz sweep test that shows which frequencies a speaker and microphone pair can use
 - **Works offline** after the first visit (Service Worker)
-- Light and dark themes, responsive from phone to desktop
+- Three designs, chosen from the top bar: **Classic**, **Steampunk** (brass, rivets and parchment, with a needle gauge) and **Isometric** (3-D blocks, isometric spectrum bars). `?theme=steampunk` or `?theme=isometric` opens one directly
+- Phone-first layout: bottom tab bar, Send button pinned above it, one big Listen button, inbox as cards
+- Classic follows the phone's light or dark setting
 - Test log on every page, saved as a .txt file for comparing devices
 
 ## Technology
@@ -28,12 +30,14 @@ Bhajanth V (RVUM26CSE062), B.Tech CSE, Section A. Guide: Soujanya K V.
 |---|---|
 | HTML, CSS, JavaScript | Structure, styling and all signal processing |
 | React 18 | Pages, reusable components, one shared audio engine (React Context) |
-| Bootstrap 5.3 | Grid, navbar, forms and validation styles, tables, colour modes |
+| Bootstrap 5.3 | Base styles, form controls and validation styles, tables, colour modes |
 | Web Audio API | Tone generation (OscillatorNode) and FFT analysis (AudioWorklet, AnalyserNode) |
 | MediaDevices | Microphone access (getUserMedia) |
 | Service Worker | Offline use |
 | Vite | Development server and production build |
 | GitHub Pages | HTTPS hosting, required by phones for microphone access |
+
+Fonts for the Steampunk (IM Fell English SC, Crimson Pro, Special Elite) and Isometric (Archivo) designs are bundled as font files (Open Font License), so they also work offline.
 
 ## Project structure
 
@@ -43,7 +47,10 @@ app/                     React source (Vite project)
   src/App.jsx            layout and hash routing
   src/hooks/             SoundDropContext (audio engine), useHashRoute
   src/pages/             Home, Send, Receive, Range Test Lab, How it works
-  src/components/        NavBar, ModeSettings, Field, MessageCard, InboxTable, SpectrumView, LogPanel
+  src/components/        NavBar, TabBar, ThemePicker, HeroArt, ModeSettings, Field, MessageCard,
+                         InboxTable, SpectrumView, SignalReadout, LogPanel
+  src/index.css          phone-first layout and the Classic design
+  src/theme-*.css        Steampunk and Isometric designs
   src/lib/modem.js       encoder, transmitter and receiver (MFSK modem)
   src/lib/formats.js     message formats and validation
   public/sw.js           Service Worker
@@ -66,7 +73,9 @@ npm run build    # builds app/dist and copies it to the repository root
 | Part | Detail |
 |---|---|
 | Modulation | 19-tone MFSK: 16 tones carry 4 bits each, plus REPEAT, START and END tones |
-| Frame | START, length byte, UTF-8 payload (up to 120 bytes), CRC-8, END |
+| Frame | START, 0.6 s calibration sweep, sync, length byte, UTF-8 payload (up to 120 bytes), CRC-16, END |
+| Calibration | The receiver measures how loud each tone arrives during the sweep and boosts weak tones (equalisation) |
+| Repair | A missed, extra or wrong tone is rebuilt from the timing when exactly one choice passes the length, CRC-16 and UTF-8 checks |
 | Sender | One phase-continuous oscillator, so there are no clicks |
 | Receiver | AudioWorklet running a 1,024-point FFT every 5 ms (AnalyserNode fallback) |
 | Clock | None needed: a repeated value is sent as REPEAT, so every tone change is a new symbol |
@@ -76,4 +85,4 @@ npm run build    # builds app/dist and copies it to the repository root
 
 `index.html?loopback&mute` routes the sender straight into the receiver inside one page, without
 speakers or a microphone. Add `&reverb=0.5&wet=2` for room echo, `&noise=0.004` for background noise,
-`&engine=analyser` for the fallback receiver, or `&nosw` to skip the Service Worker.
+`&lp=18000&ripple=10` for an uneven phone speaker, `&engine=analyser` for the fallback receiver, or `&nosw` to skip the Service Worker.

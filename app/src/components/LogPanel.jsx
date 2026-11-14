@@ -19,15 +19,15 @@ export default function LogPanel({ page }) {
     setMsg("Saved " + a.download + ".");
   };
   return (
-    <details className="card sd-card sd-log">
-      <summary className="card-header">Test log <span className="text-body-secondary">({logLines.length} entries)</span></summary>
-      <div className="card-body vstack gap-2">
-        <p className="small text-body-secondary mb-0">Every message sent, received or failed on this device is recorded. Save the log on both devices to compare them.</p>
-        <div className="d-flex gap-2 flex-wrap">
-          <button className="btn btn-sm btn-outline-primary" onClick={save}>Save log (.txt)</button>
-          <button className="btn btn-sm btn-outline-secondary" onClick={() => { clearLog(); setMsg("Log cleared."); }}>Clear</button>
+    <details className="sd-panel sd-details sd-log">
+      <summary><span className="sd-h2">Test log</span> <span className="sd-muted">({logLines.length} entries)</span></summary>
+      <div className="sd-log-body">
+        <p className="sd-hint">Every message sent, received or failed on this device is recorded. Save the log on both devices to compare them.</p>
+        <div className="sd-btnrow">
+          <button type="button" className="sd-btn-ghost" onClick={save}>Save log (.txt)</button>
+          <button type="button" className="sd-btn-ghost" onClick={() => { clearLog(); setMsg("Log cleared."); }}>Clear</button>
         </div>
-        {msg && <p className="small mb-0" aria-live="polite">{msg}</p>}
+        {msg && <p className="sd-hint" aria-live="polite">{msg}</p>}
       </div>
     </details>
   );
