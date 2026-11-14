@@ -1,8 +1,8 @@
 // SoundDrop Service Worker: offline use after the first visit.
-// The app shell is cached on install. Every later request is answered from the
-// cache straight away and refreshed from the network in the background, so the
-// app opens in airplane mode and still picks up new versions when online.
-const CACHE = "sounddrop-v1.2.0";
+// Network first: when online, every request goes to the network so the newest
+// version always loads, and a copy is saved. When the network is unavailable
+// (airplane mode), the saved copy is used instead.
+const CACHE = "sounddrop-v1.2.1";
 const SHELL = ["./", "./index.html", "./assets/app.js", "./assets/app.css", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -22,12 +22,10 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
   const key = req.mode === "navigate" ? "./index.html" : req;
   event.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      const cached = await cache.match(key, { ignoreSearch: req.mode === "navigate" });
-      const fresh = fetch(req)
+    caches.open(CACHE).then((cache) =>
+      fetch(req)
         .then((res) => { if (res && res.ok) cache.put(key, res.clone()); return res; })
-        .catch(() => cached);
-      return cached || fresh;
-    })
+        .catch(() => cache.match(key, { ignoreSearch: req.mode === "navigate" }).then((hit) => hit || Response.error()))
+    )
   );
 });
