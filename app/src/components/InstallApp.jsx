@@ -20,16 +20,16 @@ export default function InstallApp() {
   }
 
   return (
-    <div className="card border-primary-subtle"><div className="card-body d-flex flex-wrap align-items-center gap-3">
+    <div className="card border-primary-subtle"><div className="card-body p-2 d-flex align-items-center gap-2 small">
       <div className="flex-grow-1">
         <strong>{installed() ? "SoundDrop is installed" : "Install SoundDrop"}</strong>
         <div className="small text-body-secondary">
           {installed() ? "It opens from your home screen and works with no internet."
             : canInstall ? "Add it to your home screen. After that it works with no internet."
-            : "Open it once while online, then use Install app or Add to Home Screen (on iPhone: Share, then Add to Home Screen)."}
+            : "Browser menu: Install app or Add to Home Screen (iPhone: Share first)."}
         </div>
       </div>
-      {canInstall && !installed() && <button type="button" className="btn btn-primary" onClick={install}>Install app</button>}
+      {canInstall && !installed() && <button type="button" className="btn btn-primary btn-sm text-nowrap" onClick={install}>Install app</button>}
     </div></div>
   );
 }

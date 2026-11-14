@@ -41,19 +41,20 @@ export default function SendPage() {
   }
 
   return (
-    <form noValidate onSubmit={onSubmit} className="sd-narrow">
-      <h1 className="h3">Send</h1>
-      <p className="text-body-secondary">Tap Listen on the other device first, then send.</p>
+    <form noValidate onSubmit={onSubmit} className="sd-narrow vstack gap-2">
+      <h1 className="h4 mb-0">Send <small className="fs-6 fw-normal text-body-secondary">Tap Listen on the other phone first.</small></h1>
 
-      <div className="card mb-3"><div className="card-body vstack gap-3">
+      <div className="card"><div className="card-body p-3 vstack gap-2">
         <Choice name="format" options={FORMATS} value={format} onChange={(f) => { setFormat(f); setTried(false); }} />
 
-        {format === "text" && <Field as="textarea" id="text" label="Message" rows={3} value={v.text} onChange={set("text")} error={err("text")} />}
+        {format === "text" && <Field as="textarea" id="text" label="Message" rows={2} value={v.text} onChange={set("text")} error={err("text")} />}
         {format === "contact" && (
           <>
             <Field id="name" label="Name" value={v.name} onChange={set("name")} error={err("name")} />
-            <Field id="phone" label="Phone" type="tel" value={v.phone} onChange={set("phone")} error={err("phone")} placeholder="+91 98450 12345" />
-            <Field id="email" label="Email (optional)" type="email" value={v.email} onChange={set("email")} error={err("email")} />
+            <div className="row g-2">
+              <div className="col-6"><Field id="phone" label="Phone" type="tel" value={v.phone} onChange={set("phone")} error={err("phone")} placeholder="+91 98450 12345" /></div>
+              <div className="col-6"><Field id="email" label="Email (optional)" type="email" value={v.email} onChange={set("email")} error={err("email")} /></div>
+            </div>
           </>
         )}
 
@@ -62,21 +63,18 @@ export default function SendPage() {
             <span className={bytes > MAX_BYTES ? "text-danger" : ""}>{bytes} of {MAX_BYTES} bytes</span>
             <span>about {airTime(bytes).toFixed(1)} s</span>
           </div>
-          <div className="progress" style={{ height: 6 }}>
+          <div className="progress" style={{ height: 4 }}>
             <div className={"progress-bar" + (bytes > MAX_BYTES ? " bg-danger" : "")} style={{ width: Math.min(100, (bytes / MAX_BYTES) * 100) + "%" }} />
           </div>
           {err("_size") && <div className="text-danger small mt-1">{errors._size}</div>}
         </div>
-      </div></div>
 
-      <div className="card mb-3"><div className="card-body vstack gap-3">
         <div>
-          <div className="form-label">Mode</div>
           <Choice name="mode" options={Object.values(MODES)} value={mode} onChange={setMode} />
-          <div className="form-text">{mode === "silent" ? "17.5–19.2 kHz, above what most adults hear. Keep the devices within 1–2 m." : "1.5–4 kHz, a short chirp. Most reliable."}</div>
+          <div className="form-text mt-1">{mode === "silent" ? "17.5–19.2 kHz, above adult hearing. Keep phones within 1–2 m." : "1.5–4 kHz, a short chirp. Most reliable."}</div>
         </div>
-        <div>
-          <label htmlFor="volume" className="form-label">Volume: {Math.round(volume * 100)}%</label>
+        <div className="d-flex align-items-center gap-2">
+          <label htmlFor="volume" className="small text-nowrap">Volume {Math.round(volume * 100)}%</label>
           <input type="range" className="form-range" id="volume" min="0.1" max="1" step="0.05" value={volume} onChange={(e) => setVolume(+e.target.value)} />
         </div>
       </div></div>
@@ -84,10 +82,10 @@ export default function SendPage() {
       <button type="submit" className={"btn btn-lg w-100 " + (sending ? "btn-danger" : "btn-primary")}>
         {sending ? "Stop sending" : "Send through sound"}
       </button>
-      <div className="progress mt-2" style={{ height: 6 }} aria-hidden="true">
+      <div className="progress" style={{ height: 4 }} aria-hidden="true">
         <div className="progress-bar" style={{ width: (sending ? sending.progress * 100 : 0) + "%" }} />
       </div>
-      {tried && !valid && <p className="text-danger small mt-2">Fix the highlighted field first.</p>}
+      {tried && !valid && <p className="text-danger small mb-0">Fix the highlighted field first.</p>}
     </form>
   );
 }

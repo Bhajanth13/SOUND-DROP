@@ -10,14 +10,14 @@ const LINKS = [["home", "Home", "#/"], ["send", "Send", "#/send"], ["receive", "
 function NavBar({ route }) {
   const { listening } = useSoundDrop();
   return (
-    <nav className="navbar border-bottom bg-body sticky-top">
-      <div className="container sd-container">
+    <nav className="navbar py-1 border-bottom bg-body sticky-top">
+      <div className="container sd-container flex-nowrap">
         <a className="navbar-brand fw-bold d-flex align-items-center gap-2" href="#/">
-          <img src="./icon.svg" width="28" height="28" alt="" /> SoundDrop
+          <img src="./icon.svg" width="26" height="26" alt="" /> SoundDrop
         </a>
         <div className="d-flex gap-1">
           {LINKS.map(([id, label, href]) => (
-            <a key={id} href={href} className={"nav-link px-2" + (route === id ? " active fw-semibold" : "")} aria-current={route === id ? "page" : undefined}>
+            <a key={id} href={href} className={"nav-link px-1 px-sm-2" + (route === id ? " active fw-semibold" : "")} aria-current={route === id ? "page" : undefined}>
               {label}{id === "receive" && listening && <span className="sd-dot" title="Listening" />}
             </a>
           ))}
@@ -33,12 +33,9 @@ export default function App() {
   return (
     <SoundDropProvider>
       <NavBar route={route} />
-      <main className="container sd-container py-4">
+      <main className="container sd-container py-2">
         <Page />
       </main>
-      <footer className="container sd-container pb-4 small text-body-secondary">
-        SoundDrop: CS1309 Web Technology mini project by Bhajanth V, RV University
-      </footer>
     </SoundDropProvider>
   );
 }

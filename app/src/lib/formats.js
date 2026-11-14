@@ -38,9 +38,9 @@ export function validate(format, v) {
   }
   if (format === "contact") {
     const nm = v.name.trim();
-    if (nm.length < 2) e.name = "Enter a name of at least 2 letters.";
-    if (!/^\+?[0-9][0-9 ]{6,14}$/.test(v.phone.trim())) e.phone = "Enter a phone number of 7 to 15 digits, for example +91 98450 12345.";
-    if (v.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) e.email = "Enter a valid email address or leave it empty.";
+    if (nm.length < 2) e.name = "Enter at least 2 letters.";
+    if (!/^\+?[0-9][0-9 ]{6,14}$/.test(v.phone.trim())) e.phone = "Enter 7 to 15 digits, e.g. +91 98450 12345.";
+    if (v.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) e.email = "Enter a valid email or leave it empty.";
   }
   if (!Object.keys(e).length) {
     const n = byteLength(pack(format, v));

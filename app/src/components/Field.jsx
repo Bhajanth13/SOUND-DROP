@@ -4,7 +4,7 @@ export default function Field({ id, label, error, hint, as = "input", children, 
   const cls = (as === "select" ? "form-select" : "form-control") + (error ? " is-invalid" : "");
   return (
     <div>
-      <label htmlFor={id} className="form-label">{label}</label>
+      <label htmlFor={id} className="form-label small mb-1">{label}</label>
       {as === "select"
         ? <select id={id} className={cls} aria-describedby={id + "-fb"} {...props}>{children}</select>
         : <Tag id={id} className={cls} aria-invalid={!!error} aria-describedby={id + "-fb"} {...props} />}

@@ -5,10 +5,10 @@ import { MODES } from "../lib/modem.js";
 export default function MessageCard({ message: m, info }) {
   return (
     <div>
-      <span className="badge text-bg-success mb-2">Received: {formatLabel(m.format)}</span>
-      {m.format === "text" && <p className="fs-5 mb-2 text-break">{m.text}</p>}
+      <span className="badge text-bg-success mb-1">Received: {formatLabel(m.format)}</span>
+      {m.format === "text" && <p className="fs-5 mb-1 text-break">{m.text}</p>}
       {m.format === "contact" && (
-        <dl className="row mb-2">
+        <dl className="row mb-1 small">
           <dt className="col-4">Name</dt><dd className="col-8">{m.name}</dd>
           <dt className="col-4">Phone</dt><dd className="col-8">{m.phone}</dd>
           {m.email && <><dt className="col-4">Email</dt><dd className="col-8 text-break">{m.email}</dd></>}
