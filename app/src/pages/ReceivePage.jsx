@@ -2,10 +2,9 @@ import { useSoundDrop } from "../hooks/SoundDropContext.jsx";
 import { MODES } from "../lib/modem.js";
 import { summary, formatLabel } from "../lib/formats.js";
 import MessageCard from "../components/MessageCard.jsx";
-import SpectrumView from "../components/SpectrumView.jsx";
 
 export default function ReceivePage() {
-  const { listening, startListening, stopListening, status, rxMode, tones, signal, result, micError, inbox, clearInbox, analyser } = useSoundDrop();
+  const { listening, startListening, stopListening, status, rxMode, tones, signal, result, micError, inbox, clearInbox } = useSoundDrop();
   const statusText = !listening ? "Tap Listen to start."
     : status === "receiving" ? "Receiving " + MODES[rxMode].label + " message…"
     : "Listening for a message (Audible and Silent).";
@@ -28,12 +27,6 @@ export default function ReceivePage() {
         {result && result.ok === null && <p className="mb-0">Receiving… {tones} tones so far</p>}
         {result && result.ok === true && <MessageCard message={result.message} info={result.info} />}
         {result && result.ok === false && <p className="text-danger mb-0"><strong>Message not received.</strong> {result.error} Ask the sender to try again, a little closer or louder.</p>}
-      </div></div>
-
-      <div className="card mb-3"><div className="card-body">
-        <h2 className="h6">Live spectrum</h2>
-        <SpectrumView getAnalyser={analyser} active={listening} />
-        <div className="form-text">Shaded: the Audible (1.5–4 kHz) and Silent (17.5–19.2 kHz) bands. A message shows as a peak hopping inside a band.</div>
       </div></div>
 
       <div className="card"><div className="card-body">

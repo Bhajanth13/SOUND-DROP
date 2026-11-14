@@ -4,14 +4,12 @@
   --bs-primary-rgb: 47, 91, 234;
   --bs-link-color: #2f5bea;
   --bs-link-color-rgb: 47, 91, 234;
-  --sd-band: rgba(47, 91, 234, 0.1);
 }
 [data-bs-theme="dark"] {
   --bs-primary: #7d9bff;
   --bs-primary-rgb: 125, 155, 255;
   --bs-link-color: #7d9bff;
   --bs-link-color-rgb: 125, 155, 255;
-  --sd-band: rgba(125, 155, 255, 0.14);
 }
 .btn-primary { --bs-btn-bg: var(--bs-primary); --bs-btn-border-color: var(--bs-primary); --bs-btn-hover-bg: #2449c4; --bs-btn-hover-border-color: #2449c4; --bs-btn-active-bg: #1f3fae; }
 .btn-outline-primary { --bs-btn-color: var(--bs-primary); --bs-btn-border-color: var(--bs-primary); --bs-btn-hover-bg: var(--bs-primary); --bs-btn-hover-border-color: var(--bs-primary); --bs-btn-active-bg: var(--bs-primary); --bs-btn-active-border-color: var(--bs-primary); }
@@ -25,6 +23,5 @@
 
 /* the big round Listen button */
 .sd-listen { width: 140px; height: 140px; border-radius: 50%; font-size: 1.4rem; font-weight: 600; }
-.sd-spectrum { display: block; width: 100%; height: 160px; color: var(--bs-secondary-color); }
 .form-range::-webkit-slider-thumb { background: var(--bs-primary); }
 .form-range::-moz-range-thumb { background: var(--bs-primary); }

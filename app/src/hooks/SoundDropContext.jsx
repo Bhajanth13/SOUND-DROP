@@ -15,7 +15,7 @@ const LOOPBACK = new URLSearchParams(window.location.search).has("loopback");
 
 export function SoundDropProvider({ children }) {
   const ctxRef = useRef(null), loopRef = useRef(null);
-  const micRef = useRef(null), rxRef = useRef(null), txRef = useRef(null), analyserRef = useRef(null);
+  const micRef = useRef(null), rxRef = useRef(null), txRef = useRef(null);
 
   const [sending, setSending] = useState(null);          // { progress } while sending
   const [listening, setListening] = useState(false);
@@ -72,12 +72,6 @@ export function SoundDropProvider({ children }) {
         return;
       }
     }
-    const an = c.createAnalyser();                        // for the live spectrum only
-    an.fftSize = 4096;
-    an.smoothingTimeConstant = 0.3;
-    source.connect(an);
-    analyserRef.current = an;
-
     const rx = await createReceiver(c, source, {
       onState(s, m) {
         setStatus(s);
@@ -93,22 +87,21 @@ export function SoundDropProvider({ children }) {
       onError: (error) => setResult({ ok: false, error })
     });
     rx.start();
-    rxRef.current = { rx, source };
+    rxRef.current = rx;
     setListening(true);
   }, [audio]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const stopListening = useCallback(() => {
-    if (rxRef.current) { rxRef.current.rx.stop(); try { rxRef.current.source.disconnect(analyserRef.current); } catch (e) {} }
+    if (rxRef.current) rxRef.current.stop();
     if (micRef.current) micRef.current.getTracks().forEach((t) => t.stop());   // turns the microphone off
-    rxRef.current = null; micRef.current = null; analyserRef.current = null;
+    rxRef.current = null; micRef.current = null;
     setListening(false); setStatus("off"); setSignal(null);
   }, []);
 
   const value = useMemo(() => ({
     send, stopSending, sending,
     startListening, stopListening, listening, status, rxMode, tones, signal, result, micError,
-    inbox, clearInbox: () => setInbox([]),
-    analyser: () => analyserRef.current
+    inbox, clearInbox: () => setInbox([])
   }), [send, stopSending, sending, startListening, stopListening, listening, status, rxMode, tones, signal, result, micError, inbox]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
