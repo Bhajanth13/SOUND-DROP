@@ -12,6 +12,14 @@ import "./theme-steampunk.css";
 import "./theme-isometric.css";
 import App from "./App.jsx";
 
+// Keep the browser's install offer (Chrome, Edge, Android) so the Home page can show an Install button.
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  window.__sdInstall = e;
+  window.dispatchEvent(new Event("sd-install-ready"));
+});
+window.addEventListener("appinstalled", () => { window.__sdInstall = null; window.dispatchEvent(new Event("sd-install-ready")); });
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />

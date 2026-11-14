@@ -17,7 +17,7 @@ function initial() {
   const q = new URLSearchParams(window.location.search).get("theme");
   if (THEMES.some((t) => t.id === q)) return q;
   try { const s = localStorage.getItem("sd-theme"); if (THEMES.some((t) => t.id === s)) return s; } catch (e) {}
-  return "classic";
+  return "motion";
 }
 
 export function ThemeProvider({ children }) {

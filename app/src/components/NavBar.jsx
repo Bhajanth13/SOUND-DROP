@@ -36,13 +36,14 @@ export default function NavBar({ route }) {
 }
 
 export function Logo({ size = 24 }) {
-  // three sound arcs dropping into a dot
+  // a drop with sound bars inside: the app icon
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="sd-logo">
-      <circle cx="12" cy="17" r="2.6" fill="currentColor" />
-      <path d="M7.5 12.5a6.4 6.4 0 0 1 9 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M4.6 9.4a10.4 10.4 0 0 1 14.8 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity=".7" />
-      <path d="M1.8 6.3a14.4 14.4 0 0 1 20.4 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity=".4" />
+    <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true" className="sd-logo">
+      <path d="M256 40 C 256 40 104 210 104 316 a152 152 0 0 0 304 0 C 408 210 256 40 256 40 Z" fill="currentColor" />
+      <g fill="var(--sd-surface, #fff)">
+        <rect x="180" y="296" width="30" height="56" rx="15" /><rect x="226" y="246" width="30" height="156" rx="15" />
+        <rect x="272" y="274" width="30" height="100" rx="15" /><rect x="318" y="302" width="30" height="44" rx="15" />
+      </g>
     </svg>
   );
 }

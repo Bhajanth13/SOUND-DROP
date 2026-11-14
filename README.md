@@ -18,8 +18,9 @@ Bhajanth V (RVUM26CSE062), B.Tech CSE, Section A. Guide: Soujanya K V.
 - **Audible** (1,500–4,038 Hz) and **Silent** (17,500–19,192 Hz) modes, Normal (100 ms) and Fast (60 ms) speeds
 - **Receive** with automatic mode detection, a live frequency spectrum and an inbox table
 - **Range Test Lab**: a 14–21 kHz sweep test that shows which frequencies a speaker and microphone pair can use
-- **Works offline** after the first visit (Service Worker)
-- Four designs, chosen from the top bar: **Classic**, **Motion** (minimal; the Send button becomes moving sound bars, the Listen button glows with the microphone level, each received tone drops in as a dot), **Steampunk** (brass, rivets and parchment, with a needle gauge) and **Isometric** (3-D blocks, isometric spectrum bars). `?theme=motion`, `?theme=steampunk` or `?theme=isometric` opens one directly
+- **Installable app**: add it to the home screen (Install app button on Chrome, Edge and Android; Share > Add to Home Screen on iPhone). It then opens full screen from its own icon and works offline
+- **Works offline** after the first visit (network-first Service Worker: newest version when online, saved copy when offline)
+- Four designs, chosen from the top bar (Motion is the default): **Classic**, **Motion** (minimal; the Send button becomes moving sound bars, the Listen button glows with the microphone level, each received tone drops in as a dot), **Steampunk** (brass, rivets and parchment, with a needle gauge) and **Isometric** (3-D blocks, isometric spectrum bars). `?theme=motion`, `?theme=steampunk` or `?theme=isometric` opens one directly
 - Phone-first layout: bottom tab bar, Send button pinned above it, one big Listen button, inbox as cards
 - Classic follows the phone's light or dark setting
 - Test log on every page, saved as a .txt file for comparing devices
@@ -33,7 +34,8 @@ Bhajanth V (RVUM26CSE062), B.Tech CSE, Section A. Guide: Soujanya K V.
 | Bootstrap 5.3 | Base styles, form controls and validation styles, tables, colour modes |
 | Web Audio API | Tone generation (OscillatorNode) and FFT analysis (AudioWorklet, AnalyserNode) |
 | MediaDevices | Microphone access (getUserMedia) |
-| Service Worker | Offline use |
+| Service Worker | Offline use (network first, saved copy when offline) |
+| Web app manifest | Installing SoundDrop on the home screen with its own icon |
 | Vite | Development server and production build |
 | GitHub Pages | HTTPS hosting, required by phones for microphone access |
 
@@ -54,6 +56,7 @@ app/                     React source (Vite project)
   src/lib/modem.js       encoder, transmitter and receiver (MFSK modem)
   src/lib/formats.js     message formats and validation
   public/sw.js           Service Worker
+  public/manifest.webmanifest, public/icons/   app manifest and icons for installing
   scripts/publish.mjs    copies the build to the repository root
 index.html, assets/, sw.js   built site served by GitHub Pages
 prototype/               the earlier single-page prototype (v0.3)

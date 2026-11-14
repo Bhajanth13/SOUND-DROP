@@ -339,3 +339,10 @@ a { color: var(--sd-accent-dark); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* install card */
+.sd-install { grid-template-columns: 1fr; align-items: center; }
+.sd-install > div { display: grid; gap: 4px; }
+.sd-install strong { font-family: var(--sd-font-display); font-size: 1.05rem; }
+.sd-install-btn { width: 100%; }
+@media (min-width: 768px) { .sd-install { grid-template-columns: 1fr auto; } .sd-install-btn { width: auto; } }

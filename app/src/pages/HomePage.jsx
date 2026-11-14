@@ -1,5 +1,6 @@
 import { MODES, toneHz, NUM_TONES } from "../lib/modem.js";
 import HeroArt from "../components/HeroArt.jsx";
+import InstallApp from "../components/InstallApp.jsx";
 
 const STEPS = [
   { title: "Compose", text: "Type a message, a link, Wi-Fi details or a contact card." },
@@ -56,6 +57,7 @@ export default function HomePage() {
         <a className="sd-panel sd-linkcard" href="#/about"><strong>How it works</strong><span>The signal design and the technology used</span></a>
       </section>
 
+      <InstallApp />
       <p className="sd-offline">Open SoundDrop once while online on both devices. After that it works with airplane mode on.</p>
     </div>
   );

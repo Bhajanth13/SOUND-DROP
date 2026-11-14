@@ -2,8 +2,9 @@
 // Network first: when online, every request goes to the network so the newest
 // version always loads, and a copy is saved. When the network is unavailable
 // (airplane mode), the saved copy is used instead.
-const CACHE = "sounddrop-v1.2.1";
-const SHELL = ["./", "./index.html", "./assets/app.js", "./assets/app.css", "./icon.svg"];
+const CACHE = "sounddrop-v1.3.0";
+const SHELL = ["./", "./index.html", "./assets/app.js", "./assets/app.css", "./icon.svg", "./manifest.webmanifest",
+  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
