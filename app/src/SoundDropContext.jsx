@@ -1,10 +1,19 @@
-// The app's audio engine, shared by every page through React Context:
-// one AudioContext, sending, listening on the microphone, and the inbox.
-// Listening keeps running while the user moves between pages.
+/*
+ * SoundDropContext.jsx: the audio engine, shared by every page.
+ *
+ * It owns one AudioContext (the browser's sound system) and offers the pages:
+ *   send(text, mode, volume)  play a message through the speaker
+ *   startListening()          open the microphone and start the receiver
+ *   stopListening()           close the microphone
+ * plus the state the pages show: sending progress, listening, status, tone
+ * count, signal level, the last result and the inbox.
+ *
+ * It is a React Context placed above all pages, so listening keeps running
+ * while the user moves between pages. Pages reach it with useSoundDrop().
+ */
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
-import { MODES, transmit, createReceiver } from "../lib/modem.js";
-import { unpack } from "../lib/formats.js";
+import { MODES, transmit, createReceiver, unpack } from "./modem.js";
 
 const Ctx = createContext(null);
 export const useSoundDrop = () => useContext(Ctx);
@@ -14,9 +23,11 @@ export const useSoundDrop = () => useContext(Ctx);
 const LOOPBACK = new URLSearchParams(window.location.search).has("loopback");
 
 export function SoundDropProvider({ children }) {
+  // useRef: objects that must survive re-renders but should not cause one
   const ctxRef = useRef(null), loopRef = useRef(null);
   const micRef = useRef(null), rxRef = useRef(null), txRef = useRef(null);
 
+  // useState: what the pages show; changing it redraws them
   const [sending, setSending] = useState(null);          // { progress } while sending
   const [listening, setListening] = useState(false);
   const [status, setStatus] = useState("off");           // off | idle | receiving
@@ -36,6 +47,7 @@ export function SoundDropProvider({ children }) {
   const loop = () => loopRef.current || (loopRef.current = audio().createGain());
 
   // ----- sending -----
+  // transmit() schedules the whole message at once; the timer only moves the progress bar.
   const send = useCallback((text, mode, volume) => {
     const c = audio();
     if (txRef.current) txRef.current.stop();
@@ -56,6 +68,8 @@ export function SoundDropProvider({ children }) {
   }, []);
 
   // ----- receiving -----
+  // Opens the microphone, then createReceiver() runs the FFT detector on it and
+  // calls back here with the status, tone count, signal and finished message.
   const startListening = useCallback(async () => {
     const c = audio();
     setMicError("");
@@ -98,6 +112,8 @@ export function SoundDropProvider({ children }) {
     setListening(false); setStatus("off"); setSignal(null);
   }, []);
 
+  // useMemo keeps the same object between renders unless something changed,
+  // so pages are not redrawn for nothing.
   const value = useMemo(() => ({
     send, stopSending, sending,
     startListening, stopListening, listening, status, rxMode, tones, signal, result, micError,

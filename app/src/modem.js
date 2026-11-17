@@ -1,16 +1,30 @@
 /*
- * SoundDrop modem: turns text into tones and tones back into text.
+ * modem.js: everything that turns a message into sound and back.
+ * It has no React in it, so it can be tested on its own.
  *
- * 19-tone MFSK, one tone per symbol (100 ms):
- *   tones 0..15 -> one 4-bit nibble each
- *   tone 16     -> REPEAT (the same nibble again)
+ *  Part 1  Settings: the 19 tones, timing, the two modes
+ *  Part 2  CRC-16 checksum
+ *  Part 3  Sender:   encode() text -> tone numbers, transmit() plays them
+ *  Part 4  Detector: decides which tone is playing (state machine)
+ *  Part 5  AudioWorklet: FFT on the browser's audio thread, feeds the detector
+ *  Part 6  Receiver: decodeFrame() tones -> text, createReceiver() wires it up
+ *  Part 7  Message formats: text or contact card, validation, pack / unpack
+ *
+ * How the sound carries data (19-tone MFSK, one tone per symbol, 100 ms each):
+ *   tones 0..15 -> one 4-bit value (a "nibble") each, so one byte = 2 tones
+ *   tone 16     -> REPEAT: "the same nibble again"
  *   tone 17     -> START marker
  *   tone 18     -> END marker
  * Two neighbouring tones are never the same (a repeated nibble is sent as
  * REPEAT), so the receiver needs no clock: every change of tone is a new symbol.
  *
- * Frame: START | calibration sweep | sync START | length | payload (UTF-8) | CRC-16 | END
+ * One message (a "frame"):
+ *   START | calibration sweep | sync START | length | payload (UTF-8) | CRC-16 | END
  */
+
+// =====================================================================
+// Part 1  Settings
+// =====================================================================
 
 const REPEAT = 16, START = 17, END = 18, NUM_TONES = 19;
 const MAX_BYTES = 120;
@@ -26,21 +40,31 @@ const MODES = {
 
 const toneHz = (mode, i) => mode.base + i * mode.step;
 
-// CRC-16-CCITT (polynomial 0x1021, start value 0xFFFF)
+// =====================================================================
+// Part 2  CRC-16 checksum
+// =====================================================================
+
+// CRC-16-CCITT (polynomial 0x1021, start value 0xFFFF). Binary long division
+// where "subtract" is XOR; the 16-bit remainder is sent after the message.
+// The receiver recomputes it: a damaged message gives a different remainder.
 function crc16(bytes) {
   let c = 0xffff;
   for (const b of bytes) {
-    c ^= b << 8;
-    for (let k = 0; k < 8; k++) c = c & 0x8000 ? ((c << 1) ^ 0x1021) & 0xffff : (c << 1) & 0xffff;
+    c ^= b << 8;                                   // bring the next byte into the top 8 bits
+    for (let k = 0; k < 8; k++)                    // one bit at a time
+      c = c & 0x8000 ? ((c << 1) ^ 0x1021) & 0xffff : (c << 1) & 0xffff;   // top bit 1: shift and XOR the polynomial
   }
   return c;
 }
 
-// ---------------- sender ----------------
+// =====================================================================
+// Part 3  Sender
+// =====================================================================
 
-// text -> list of tone numbers, including START and END
+// text -> list of tone numbers, including START and END.
+// Bytes sent: [length, ...UTF-8 payload, CRC high byte, CRC low byte].
 function encode(text) {
-  const payload = Array.from(new TextEncoder().encode(text));
+  const payload = Array.from(new TextEncoder().encode(text));    // UTF-8: any language works
   if (payload.length === 0) throw new Error("Type a message first.");
   if (payload.length > MAX_BYTES) throw new Error("Message is too long: " + payload.length + " bytes, the limit is " + MAX_BYTES + ".");
   const crc = crc16(payload);
@@ -49,7 +73,7 @@ function encode(text) {
   let lastTone = START, lastNibble = -1;
   for (const b of bytes) {
     for (const n of [b >> 4, b & 15]) {           // high nibble first
-      const t = n === lastNibble && lastTone !== REPEAT ? REPEAT : n;
+      const t = n === lastNibble && lastTone !== REPEAT ? REPEAT : n;   // never the same tone twice in a row
       tones.push(t);
       lastTone = t; lastNibble = n;
     }
@@ -58,11 +82,15 @@ function encode(text) {
   return tones;
 }
 
-// Seconds a message of this many bytes takes to play
+// Seconds a message of this many bytes takes to play (shown on the Send page):
+// two markers + 17 sweep tones + sync + 2 tones per byte (payload + length + 2 CRC bytes)
 const airTime = (bytes) => 2 * MARKER_S + 17 * CAL_S + SYNC_S + (bytes + 3) * 2 * SYMBOL_S;
 
-// Plays the message. One oscillator glides between tones, so there are no
-// clicks (a click would be audible even in Silent mode).
+// Plays the message through the speaker (destination).
+// The whole message is scheduled in advance on the audio clock, so a busy
+// phone cannot make the tones uneven. One oscillator glides between tones,
+// so there are no clicks (a click would be audible even in Silent mode).
+// Returns { duration, stop(), progress() }.
 function transmit(ctx, destination, text, { mode, volume }) {
   const tones = encode(text);
   const steps = [[START, MARKER_S]];
@@ -72,7 +100,7 @@ function transmit(ctx, destination, text, { mode, volume }) {
 
   const osc = ctx.createOscillator(), gain = ctx.createGain();
   osc.type = "sine";
-  const t0 = ctx.currentTime + 0.1;
+  const t0 = ctx.currentTime + 0.1;                                 // start 100 ms from now
   let t = t0;
   steps.forEach(([tone, dur], i) => {
     const f = toneHz(mode, tone);
@@ -97,7 +125,9 @@ function transmit(ctx, destination, text, { mode, volume }) {
   };
 }
 
-// ---------------- receiver ----------------
+// =====================================================================
+// Part 4  Detector
+// =====================================================================
 
 // Decides which tone is playing. feed(levels, ms) gets the level in dB of all
 // 19 tones of each mode, about 200 times a second, and returns events:
@@ -113,6 +143,7 @@ function makeDetector(cfg) {
   let startMode = null, startSince = 0, lastValidAt = 0, lastLevelAt = -1e9, lockAt = 0;
   let gain = null, boost = new Array(N).fill(0);
 
+  // noise floor = the median of the 19 levels (most tones are silent at any moment)
   const median = (a) => a.slice().sort((x, y) => x - y)[a.length >> 1];
   function pick(L, exclude) {                 // loudest and second-loudest tone
     let best = -1, second = -1;
@@ -123,14 +154,16 @@ function makeDetector(cfg) {
     }
     return { best, second };
   }
-  function lock(id, t) {
+  function lock(id, t) {                      // START heard: lock onto this mode and calibrate
     state = "calib"; mode = id; lockAt = t; current = START_T; cand = null; candCount = 0; lastValidAt = t;
     gain = new Array(N).fill(-200); boost = new Array(N).fill(0);
   }
-  function reset() { state = "idle"; mode = null; current = null; cand = null; candCount = 0; startMode = null; boost = new Array(N).fill(0); }
+  function reset() {                          // back to idle, waiting for the next message
+  state = "idle"; mode = null; current = null; cand = null; candCount = 0; startMode = null; boost = new Array(N).fill(0); }
 
+  // Called about 200 times a second with the dB level of every tone in both bands.
   function feed(levels, t) {
-    const ev = [];
+    const ev = [];                            // events for the page: level, lock, start, sym, end, lost
     if (state === "idle") {                   // look for a START tone in either band
       let found = null, top = null;
       for (const id in levels) {
@@ -186,6 +219,7 @@ function makeDetector(cfg) {
   return { feed, reset };
 }
 
+// All thresholds in one place
 const DETECTOR_CFG = {
   snrMin: 12,        // dB the winning tone must be above the noise floor
   marginMin: 6,      // dB it must beat the second-loudest tone by
@@ -199,9 +233,15 @@ const DETECTOR_CFG = {
   calibMaxMs: 2000
 };
 
+// =====================================================================
+// Part 5  AudioWorklet (FFT)
+// =====================================================================
+
 // AudioWorklet: runs on the browser's audio thread, so a busy page cannot make
 // it miss tones. Every 5 ms it runs a Hann-windowed 1024-point FFT on the
 // latest samples, reads the level of each tone and feeds the detector.
+// A worklet must be loaded from its own script, so its source is written here as
+// a string; makeDetector.toString() copies the detector above into it.
 const WORKLET_SRC = `
   const makeDetector = ${makeDetector.toString()};
   class SoundDropDetector extends AudioWorkletProcessor {
@@ -211,11 +251,12 @@ const WORKLET_SRC = `
       this.N = N; this.hop = Math.round(sampleRate * 0.005);
       this.buf = new Float32Array(N); this.re = new Float32Array(N); this.im = new Float32Array(N);
       this.pos = 0; this.filled = 0; this.since = 0;
-      this.win = new Float32Array(N);
+      this.win = new Float32Array(N);           // Hann window: removes false energy from cutting the sound into pieces
       for (let i = 0; i < N; i++) this.win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));
       const bits = Math.log2(N);
       this.rev = new Uint16Array(N);            // bit-reversed order for the FFT
       for (let i = 0; i < N; i++) { let r = 0; for (let b = 0; b < bits; b++) r |= ((i >> b) & 1) << (bits - 1 - b); this.rev[i] = r; }
+      // twiddle factors: the rotations the FFT multiplies by
       this.cos = new Float32Array(N / 2); this.sin = new Float32Array(N / 2);
       for (let i = 0; i < N / 2; i++) { this.cos[i] = Math.cos(2 * Math.PI * i / N); this.sin[i] = -Math.sin(2 * Math.PI * i / N); }
       const binHz = sampleRate / N;
@@ -236,7 +277,7 @@ const WORKLET_SRC = `
         }
       }
     }
-    analyze() {
+    analyze() {                                // window -> FFT -> level of each tone in dB
       const N = this.N, re = this.re, im = this.im;
       for (let i = 0, j = this.pos; i < N; i++, j = (j + 1) % N) { re[this.rev[i]] = this.buf[j] * this.win[i]; im[this.rev[i]] = 0; }
       this.fft();
@@ -250,7 +291,7 @@ const WORKLET_SRC = `
       }
       for (const e of this.det.feed(levels, currentFrame / sampleRate * 1000)) this.port.postMessage(e);
     }
-    process(inputs) {
+    process(inputs) {                          // called by the browser with every 128 microphone samples
       const ch = inputs[0] && inputs[0][0];
       if (ch) {
         for (let i = 0; i < ch.length; i++) {
@@ -265,16 +306,22 @@ const WORKLET_SRC = `
   registerProcessor("sounddrop-detector", SoundDropDetector);
 `;
 
-// tones (without START/END) -> text, or null if any check fails
+// =====================================================================
+// Part 6  Receiver
+// =====================================================================
+
+// tones (without START/END) -> text, or null if any check fails.
+// Three checks: the length byte, the CRC-16, and valid UTF-8 text.
+// A damaged message is never guessed: it is rejected and sent again.
 function decodeFrame(tones) {
   const nibs = [];
   for (const t of tones) {
-    if (t === REPEAT) { if (!nibs.length) return null; nibs.push(nibs[nibs.length - 1]); }
+    if (t === REPEAT) { if (!nibs.length) return null; nibs.push(nibs[nibs.length - 1]); }   // REPEAT = previous value
     else nibs.push(t);
   }
   if (nibs.length % 2 !== 0 || nibs.length < 8) return null;
   const bytes = [];
-  for (let i = 0; i < nibs.length; i += 2) bytes.push((nibs[i] << 4) | nibs[i + 1]);
+  for (let i = 0; i < nibs.length; i += 2) bytes.push((nibs[i] << 4) | nibs[i + 1]);   // two nibbles -> one byte
   const payload = bytes.slice(1, -2);
   if (bytes[0] !== payload.length) return null;                                          // length byte
   if (crc16(payload) !== ((bytes[bytes.length - 2] << 8) | bytes[bytes.length - 1])) return null;   // CRC-16
@@ -283,14 +330,15 @@ function decodeFrame(tones) {
 }
 
 // Connects the microphone (source) to the detector worklet and turns its
-// events into messages. Resolves to { start(), stop() }.
+// events into messages for the page (handlers.onState, onSymbol, onLevel,
+// onMessage, onError). Resolves to { start(), stop() }.
 async function createReceiver(ctx, source, handlers) {
   const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: "application/javascript" }));
   await ctx.audioWorklet.addModule(url);
   URL.revokeObjectURL(url);
 
   let rxMode = null, tones = [], snrSum = 0, startedAt = 0;
-  function finish(ok) {
+  function finish(ok) {                       // the message ended: decode it and report the result
     const info = { mode: rxMode, ms: performance.now() - startedAt, avgSnr: tones.length ? snrSum / tones.length : 0 };
     const r = ok ? decodeFrame(tones) : null;
     if (r) handlers.onMessage(r.text, { ...info, bytes: r.bytes });
@@ -298,7 +346,7 @@ async function createReceiver(ctx, source, handlers) {
     rxMode = null;
     handlers.onState("idle");
   }
-  function onEvent(e) {
+  function onEvent(e) {                       // one event from the detector in the worklet
     if (e.t === "level") return handlers.onLevel(e.snr);
     if (e.t === "lock") return handlers.onState("receiving", e.mode);
     if (e.t === "start") { rxMode = e.mode; tones = []; snrSum = 0; startedAt = performance.now(); return; }
@@ -333,4 +381,82 @@ async function createReceiver(ctx, source, handlers) {
   };
 }
 
-export { MODES, MAX_BYTES, NUM_TONES, toneHz, airTime, transmit, createReceiver };
+// =====================================================================
+// Part 7  Message formats
+// =====================================================================
+
+// Before a message becomes sound it is packed into one string: a type letter,
+// ":" and the fields joined by the ASCII unit separator (0x1F), a character
+// people cannot type by accident.
+//   T:<text>                      a text message
+//   C:<name>\u001f<phone>\u001f<email>   a contact card
+
+const SEP = "\u001f";
+
+// The formats offered on the Send page
+const FORMATS = [
+  { id: "text", code: "T", label: "Text", hint: "A short sentence or note" },
+  { id: "contact", code: "C", label: "Contact card", hint: "Name, phone and email" }
+];
+
+// Empty form values for each format
+const EMPTY = {
+  text: { text: "" },
+  contact: { name: "", phone: "", email: "" }
+};
+
+// Size in UTF-8 bytes (what the 120-byte limit counts)
+const byteLength = (s) => new TextEncoder().encode(s).length;
+
+// form values -> packed string
+function pack(format, v) {
+  switch (format) {
+    case "text": return "T:" + v.text.trim();
+    case "contact": return "C:" + [v.name.trim(), v.phone.trim(), v.email.trim()].join(SEP);
+    default: throw new Error("Unknown format");
+  }
+}
+
+// Returns { field: "message" } for every field that is wrong; empty when valid.
+function validate(format, v) {
+  const e = {};
+  if (format === "text") {
+    if (!v.text.trim()) e.text = "Type a message to send.";
+  }
+  if (format === "contact") {
+    const nm = v.name.trim();
+    if (nm.length < 2) e.name = "Enter at least 2 letters.";
+    if (!/^\+?[0-9][0-9 ]{6,14}$/.test(v.phone.trim())) e.phone = "Enter 7 to 15 digits, e.g. +91 98450 12345.";
+    if (v.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) e.email = "Enter a valid email or leave it empty.";
+  }
+  if (!Object.keys(e).length) {
+    const n = byteLength(pack(format, v));
+    if (n > MAX_BYTES) e._size = "This message is " + n + " bytes. Shorten it to " + MAX_BYTES + " bytes or less.";
+  }
+  return e;
+}
+
+// Unpack a received text. Anything without a known prefix is shown as text.
+function unpack(raw) {
+  const code = raw.slice(0, 2), body = raw.slice(2);
+  if (code === "T:") return { format: "text", text: body };
+  if (code === "C:") {
+    const [name = "", phone = "", email = ""] = body.split(SEP);
+    return { format: "contact", name, phone, email };
+  }
+  return { format: "text", text: raw };
+}
+
+// One line for the inbox
+function summary(m) {
+  if (m.format === "contact") return "Contact: " + m.name;
+  return m.text;
+}
+
+// "text" -> "Text", "contact" -> "Contact card"
+const formatLabel = (id) => (FORMATS.find((f) => f.id === id) || FORMATS[0]).label;
+
+export {
+  MODES, MAX_BYTES, NUM_TONES, toneHz, airTime, transmit, createReceiver,       // sound
+  FORMATS, EMPTY, byteLength, pack, validate, unpack, summary, formatLabel      // message formats
+};
