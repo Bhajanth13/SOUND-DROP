@@ -333,4 +333,4 @@ async function createReceiver(ctx, source, handlers) {
   };
 }
 
-export { MODES, MAX_BYTES, NUM_TONES, REPEAT, START, END, SYMBOL_S, toneHz, crc16, encode, airTime, transmit, makeDetector, DETECTOR_CFG, decodeFrame, createReceiver };
+export { MODES, MAX_BYTES, NUM_TONES, toneHz, airTime, transmit, createReceiver };

@@ -8,7 +8,7 @@
 
 import { MAX_BYTES } from "./modem.js";
 
-export const SEP = "\u001f";
+const SEP = "\u001f";
 
 export const FORMATS = [
   { id: "text", code: "T", label: "Text", hint: "A short sentence or note" },
