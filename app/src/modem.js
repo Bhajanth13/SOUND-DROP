@@ -2,26 +2,24 @@
  * modem.js: everything that turns a message into sound and back.
  * It has no React in it, so it can be tested on its own.
  *
- *  Part 1  Settings: the 19 tones, timing, the two modes, the two speeds
- *  Part 2  Error checking and repair: CRC-16 and Reed-Solomon
- *  Part 3  Sender:   encode() bytes -> tone numbers, transmit() plays them
+ *  Part 1  Settings: the 19 tones, timing, the two modes
+ *  Part 2  CRC-16 checksum
+ *  Part 3  Sender:   encode() text -> tone numbers, transmit() plays them
  *  Part 4  Detector: decides which tone is playing (state machine)
  *  Part 5  AudioWorklet: FFT on the browser's audio thread, feeds the detector
- *  Part 6  Receiver: decodeFrame() tones -> bytes, createReceiver() wires it up
- *  Part 7  Message formats: text or contact card, validation, pack / unpack, vCard
- *  Part 8  Password lock: AES-GCM encryption with the browser's Web Crypto
+ *  Part 6  Receiver: decodeFrame() tones -> text, createReceiver() wires it up
+ *  Part 7  Message formats: text or contact card, validation, pack / unpack
  *
- * How the sound carries data (19-tone MFSK, one tone per symbol, 100 ms or 50 ms):
+ * How the sound carries data (19-tone MFSK, one tone per symbol, 100 ms each):
  *   tones 0..15 -> one 4-bit value (a "nibble") each, so one byte = 2 tones
  *   tone 16     -> REPEAT: "the same nibble again"
  *   tone 17     -> START marker
  *   tone 18     -> END marker
  * Two neighbouring tones are never the same (a repeated nibble is sent as
  * REPEAT), so the receiver needs no clock: every change of tone is a new symbol.
- * For the same reason the receiver does not need to know the speed.
  *
  * One message (a "frame"):
- *   START | calibration sweep | sync START | length | payload | CRC-16 | 8 repair bytes | END
+ *   START | calibration sweep | sync START | length | payload (UTF-8) | CRC-16 | END
  */
 
 // =====================================================================
@@ -29,8 +27,8 @@
 // =====================================================================
 
 const REPEAT = 16, START = 17, END = 18, NUM_TONES = 19;
-const MAX_BYTES = 120;  // payload limit (the length byte must fit in one byte)
-const NSYM = 8;          // Reed-Solomon repair bytes: up to 4 wrong bytes can be fixed
+const MAX_BYTES = 120;
+const SYMBOL_S = 0.1;    // one data tone lasts 100 ms
 const MARKER_S = 0.3;    // START and END last 300 ms
 const CAL_S = 0.03;      // each tone of the calibration sweep lasts 30 ms
 const SYNC_S = 0.09;     // the sync START after the sweep lasts 90 ms
@@ -40,16 +38,10 @@ const MODES = {
   silent: { id: "silent", label: "Silent", base: 17500, step: 94 }
 };
 
-// How long one data tone lasts. Fast halves the time; best at close range.
-const SPEEDS = {
-  normal: { id: "normal", label: "Normal", symbol: 0.1 },
-  fast: { id: "fast", label: "Fast", symbol: 0.05 }
-};
-
 const toneHz = (mode, i) => mode.base + i * mode.step;
 
 // =====================================================================
-// Part 2  Error checking and repair
+// Part 2  CRC-16 checksum
 // =====================================================================
 
 // CRC-16-CCITT (polynomial 0x1021, start value 0xFFFF). Binary long division
@@ -65,122 +57,18 @@ function crc16(bytes) {
   return c;
 }
 
-// Reed-Solomon error correction over GF(256), the code used on CDs and QR codes.
-// NSYM extra "repair" bytes are worked out from the message. The receiver uses
-// them to find and fix up to NSYM / 2 wrong bytes (a misheard tone spoils one byte).
-// Arithmetic is in GF(256): adding is XOR, multiplying uses log tables.
-const GF_EXP = new Uint8Array(512), GF_LOG = new Uint8Array(256);
-(function buildTables() {
-  let x = 1;
-  for (let i = 0; i < 255; i++) {
-    GF_EXP[i] = x; GF_LOG[x] = i;
-    x <<= 1; if (x & 0x100) x ^= 0x11d;           // the field's polynomial x^8 + x^4 + x^3 + x^2 + 1
-  }
-  for (let i = 255; i < 512; i++) GF_EXP[i] = GF_EXP[i - 255];
-})();
-const gfMul = (a, b) => (a && b ? GF_EXP[GF_LOG[a] + GF_LOG[b]] : 0);
-const gfDiv = (a, b) => (a ? GF_EXP[(GF_LOG[a] + 255 - GF_LOG[b]) % 255] : 0);
-const gfPow = (a, n) => GF_EXP[(((GF_LOG[a] * n) % 255) + 255) % 255];
-const gfInv = (a) => GF_EXP[255 - GF_LOG[a]];
-
-// Polynomials are arrays of coefficients, highest power first.
-const polyScale = (p, x) => p.map((c) => gfMul(c, x));
-function polyAdd(p, q) {
-  const r = new Array(Math.max(p.length, q.length)).fill(0);
-  for (let i = 0; i < p.length; i++) r[i + r.length - p.length] = p[i];
-  for (let i = 0; i < q.length; i++) r[i + r.length - q.length] ^= q[i];
-  return r;
-}
-function polyMul(p, q) {
-  const r = new Array(p.length + q.length - 1).fill(0);
-  for (let j = 0; j < q.length; j++) for (let i = 0; i < p.length; i++) r[i + j] ^= gfMul(p[i], q[j]);
-  return r;
-}
-function polyEval(p, x) {                          // Horner's rule
-  let y = p[0];
-  for (let i = 1; i < p.length; i++) y = gfMul(y, x) ^ p[i];
-  return y;
-}
-
-// Sender: append NSYM repair bytes (the remainder of dividing by the generator).
-function rsEncode(msg, nsym) {
-  let gen = [1];
-  for (let i = 0; i < nsym; i++) gen = polyMul(gen, [1, GF_EXP[i]]);
-  const out = msg.concat(new Array(nsym).fill(0));
-  for (let i = 0; i < msg.length; i++) {
-    const c = out[i];
-    if (c) for (let j = 1; j < gen.length; j++) out[i + j] ^= gfMul(gen[j], c);
-  }
-  return msg.concat(out.slice(msg.length));
-}
-
-// Receiver: returns { data, fixed } with the message part repaired, or null
-// when there are too many errors. Steps: syndromes (all zero = no error),
-// Berlekamp-Massey finds the error locator, a Chien search finds the error
-// positions, the Forney formula finds the error values.
-function rsDecode(msg, nsym) {
-  const n = msg.length;
-  const synd = [0];
-  for (let i = 0; i < nsym; i++) synd.push(polyEval(msg, GF_EXP[i]));
-  if (synd.every((s) => s === 0)) return { data: msg.slice(0, n - nsym), fixed: 0 };
-
-  // Berlekamp-Massey: the shortest polynomial that explains the syndromes
-  let errLoc = [1], oldLoc = [1];
-  for (let i = 0; i < nsym; i++) {
-    const k = i + 1;
-    let delta = synd[k];
-    for (let j = 1; j < errLoc.length; j++) delta ^= gfMul(errLoc[errLoc.length - 1 - j], synd[k - j]);
-    oldLoc = oldLoc.concat([0]);
-    if (delta !== 0) {
-      if (oldLoc.length > errLoc.length) {
-        const newLoc = polyScale(oldLoc, delta);
-        oldLoc = polyScale(errLoc, gfInv(delta));
-        errLoc = newLoc;
-      }
-      errLoc = polyAdd(errLoc, polyScale(oldLoc, delta));
-    }
-  }
-  while (errLoc.length && errLoc[0] === 0) errLoc.shift();
-  const errs = errLoc.length - 1;
-  if (errs * 2 > nsym) return null;                // too many errors to fix
-
-  // Chien search: try every position
-  const rev = errLoc.slice().reverse(), pos = [];
-  for (let i = 0; i < n; i++) if (polyEval(rev, gfPow(2, i)) === 0) pos.push(n - 1 - i);
-  if (pos.length !== errs) return null;
-
-  // Forney: the size of each error
-  const coefPos = pos.map((p) => n - 1 - p);
-  let loc = [1];
-  for (const c of coefPos) loc = polyMul(loc, polyAdd([1], [gfPow(2, c), 0]));
-  const prod = polyMul(synd.slice().reverse(), loc);
-  const ev = prod.slice(prod.length - loc.length);   // error evaluator = (S * locator) mod x^(errors + 1)
-  const X = coefPos.map((c) => gfPow(2, c));
-  const out = msg.slice();
-  for (let i = 0; i < X.length; i++) {
-    const xiInv = gfInv(X[i]);
-    let denom = 1;
-    for (let j = 0; j < X.length; j++) if (j !== i) denom = gfMul(denom, 1 ^ gfMul(xiInv, X[j]));
-    if (denom === 0) return null;
-    const y = gfMul(X[i], polyEval(ev, xiInv));
-    out[pos[i]] ^= gfDiv(y, denom);
-  }
-  for (let i = 0; i < nsym; i++) if (polyEval(out, GF_EXP[i]) !== 0) return null;   // check the repair
-  return { data: out.slice(0, n - nsym), fixed: errs };
-}
-
 // =====================================================================
 // Part 3  Sender
 // =====================================================================
 
-// bytes (or text) -> list of tone numbers, including START and END.
-// Bytes sent: [length, ...payload, CRC high, CRC low, ...8 Reed-Solomon bytes].
-function encode(data) {
-  const payload = Array.from(typeof data === "string" ? new TextEncoder().encode(data) : data);   // UTF-8: any language works
+// text -> list of tone numbers, including START and END.
+// Bytes sent: [length, ...UTF-8 payload, CRC high byte, CRC low byte].
+function encode(text) {
+  const payload = Array.from(new TextEncoder().encode(text));    // UTF-8: any language works
   if (payload.length === 0) throw new Error("Type a message first.");
   if (payload.length > MAX_BYTES) throw new Error("Message is too long: " + payload.length + " bytes, the limit is " + MAX_BYTES + ".");
   const crc = crc16(payload);
-  const bytes = rsEncode([payload.length, ...payload, crc >> 8, crc & 255], NSYM);
+  const bytes = [payload.length, ...payload, crc >> 8, crc & 255];
   const tones = [START];
   let lastTone = START, lastNibble = -1;
   for (const b of bytes) {
@@ -194,22 +82,21 @@ function encode(data) {
   return tones;
 }
 
-// Seconds a message of this many bytes takes to play (shown on the Send page): two markers
-// + 17 sweep tones + sync + 2 tones per byte (payload, length, 2 CRC bytes, 8 repair bytes)
-const airTime = (bytes, speed = "normal") =>
-  2 * MARKER_S + 17 * CAL_S + SYNC_S + (bytes + 3 + NSYM) * 2 * SPEEDS[speed].symbol;
+// Seconds a message of this many bytes takes to play (shown on the Send page):
+// two markers + 17 sweep tones + sync + 2 tones per byte (payload + length + 2 CRC bytes)
+const airTime = (bytes) => 2 * MARKER_S + 17 * CAL_S + SYNC_S + (bytes + 3) * 2 * SYMBOL_S;
 
-// Plays the message (text or bytes) through the speaker (destination).
+// Plays the message through the speaker (destination).
 // The whole message is scheduled in advance on the audio clock, so a busy
 // phone cannot make the tones uneven. One oscillator glides between tones,
 // so there are no clicks (a click would be audible even in Silent mode).
 // Returns { duration, stop(), progress() }.
-function transmit(ctx, destination, data, { mode, volume, speed = "normal" }) {
-  const tones = encode(data), symbol = SPEEDS[speed].symbol;
+function transmit(ctx, destination, text, { mode, volume }) {
+  const tones = encode(text);
   const steps = [[START, MARKER_S]];
   for (let k = 0; k <= 16; k++) steps.push([k, CAL_S]);          // calibration sweep
   steps.push([START, SYNC_S]);                                     // sync: data follows
-  for (const t of tones.slice(1)) steps.push([t, t === END ? MARKER_S : symbol]);
+  for (const t of tones.slice(1)) steps.push([t, t === END ? MARKER_S : SYMBOL_S]);
 
   const osc = ctx.createOscillator(), gain = ctx.createGain();
   osc.type = "sine";
@@ -423,56 +310,23 @@ const WORKLET_SRC = `
 // Part 6  Receiver
 // =====================================================================
 
-// One attempt: tones -> bytes -> Reed-Solomon repair (at most maxFix bytes)
-// -> length and CRC-16 checks. Returns { data, bytes, fixed } or null.
-function tryDecode(tones, maxFix) {
+// tones (without START/END) -> text, or null if any check fails.
+// Three checks: the length byte, the CRC-16, and valid UTF-8 text.
+// A damaged message is never guessed: it is rejected and sent again.
+function decodeFrame(tones) {
   const nibs = [];
   for (const t of tones) {
     if (t === REPEAT) { if (!nibs.length) return null; nibs.push(nibs[nibs.length - 1]); }   // REPEAT = previous value
     else nibs.push(t);
   }
-  if (nibs.length % 2 !== 0 || nibs.length < (4 + NSYM) * 2) return null;
-  const raw = [];
-  for (let i = 0; i < nibs.length; i += 2) raw.push((nibs[i] << 4) | nibs[i + 1]);    // two nibbles -> one byte
-  const rs = rsDecode(raw, NSYM);                                                      // repair
-  if (!rs || rs.fixed > maxFix) return null;
-  const bytes = rs.data, payload = bytes.slice(1, -2);
-  if (bytes[0] !== payload.length) return null;                                        // length byte
+  if (nibs.length % 2 !== 0 || nibs.length < 8) return null;
+  const bytes = [];
+  for (let i = 0; i < nibs.length; i += 2) bytes.push((nibs[i] << 4) | nibs[i + 1]);   // two nibbles -> one byte
+  const payload = bytes.slice(1, -2);
+  if (bytes[0] !== payload.length) return null;                                          // length byte
   if (crc16(payload) !== ((bytes[bytes.length - 2] << 8) | bytes[bytes.length - 1])) return null;   // CRC-16
-  return { data: new Uint8Array(payload), bytes: payload.length, fixed: rs.fixed };
-}
-
-// tones (without START/END) -> { data: payload bytes, bytes, fixed }, or null.
-// 1. Reed-Solomon repairs up to 4 misheard bytes, then the length byte and the
-//    CRC-16 must match.
-// 2. Resync: a short noise can add an extra tone, or two tones can merge into
-//    one. Then every later byte is shifted and step 1 fails. So the decoder
-//    tries removing one or two tones, or putting back one or two (as a
-//    placeholder that Reed-Solomon then corrects). A candidate is accepted only
-//    if it needs at most 2 repaired bytes and the CRC-16 matches, so a wrong
-//    message is practically never accepted.
-// A message that still fails is never guessed: it is rejected and sent again.
-function decodeFrame(tones) {
-  const r = tryDecode(tones, NSYM / 2);
-  if (r) return r;
-  const n = tones.length, ok = (t, edits) => { const d = tryDecode(t, 2); return d ? { ...d, fixed: d.fixed + edits } : null; };
-  const drop = (t, i) => t.slice(0, i).concat(t.slice(i + 1));
-  const add = (t, i) => t.slice(0, i).concat([0], t.slice(i));      // 0 = placeholder value
-  for (const edits of [1, 2]) {                                      // one change first, then two
-    if ((n + edits) % 2 !== 0 && (n - edits) % 2 !== 0) continue;
-    for (let i = 0; i <= n; i++) {
-      if (edits === 1) {
-        const a = i < n && ok(drop(tones, i), 1); if (a) return a;   // an extra tone was heard
-        const b = ok(add(tones, i), 1); if (b) return b;             // a tone was missed
-      } else {
-        for (let j = i; j <= n; j++) {
-          const a = j + 1 < n && ok(drop(drop(tones, j + 1), i), 2); if (a) return a;
-          const b = ok(add(add(tones, j), i), 2); if (b) return b;
-        }
-      }
-    }
-  }
-  return null;
+  try { return { text: new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(payload)), bytes: payload.length }; }
+  catch (e) { return null; }                                                              // not valid UTF-8
 }
 
 // Connects the microphone (source) to the detector worklet and turns its
@@ -487,8 +341,8 @@ async function createReceiver(ctx, source, handlers) {
   function finish(ok) {                       // the message ended: decode it and report the result
     const info = { mode: rxMode, ms: performance.now() - startedAt, avgSnr: tones.length ? snrSum / tones.length : 0 };
     const r = ok ? decodeFrame(tones) : null;
-    if (r) handlers.onMessage(r.data, { ...info, bytes: r.bytes, fixed: r.fixed });
-    else handlers.onError(ok ? "The message was too damaged to repair." : "Signal lost in the middle of the message.");
+    if (r) handlers.onMessage(r.text, { ...info, bytes: r.bytes });
+    else handlers.onError(ok ? "Checksum failed: the message was damaged on the way." : "Signal lost in the middle of the message.");
     rxMode = null;
     handlers.onState("idle");
   }
@@ -500,7 +354,7 @@ async function createReceiver(ctx, source, handlers) {
     if (e.t === "sym") {
       tones.push(e.tone); snrSum += e.snr;
       handlers.onSymbol(tones.length);
-      if (tones.length > (MAX_BYTES + 3 + NSYM) * 2) finish(false);
+      if (tones.length > (MAX_BYTES + 3) * 2) finish(false);
     }
     if (e.t === "end") finish(true);
     if (e.t === "lost") finish(false);
@@ -563,26 +417,21 @@ function pack(format, v) {
   }
 }
 
-// Bytes the message will take on air; a password lock adds LOCK_OVERHEAD bytes.
-const sentBytes = (format, v, password) => byteLength(pack(format, v)) + (password ? LOCK_OVERHEAD : 0);
-
 // Returns { field: "message" } for every field that is wrong; empty when valid.
-// password is optional: empty means the message is sent unlocked.
-function validate(format, v, password = "") {
+function validate(format, v) {
   const e = {};
-  if (password && password.length < 4) e.password = "Use 4 or more characters.";
   if (format === "text") {
     if (!v.text.trim()) e.text = "Type a message to send.";
   }
   if (format === "contact") {
     const nm = v.name.trim();
     if (nm.length < 2) e.name = "Enter at least 2 letters.";
-    if (!/^\+?[0-9][0-9 ]{6,14}$/.test(v.phone.trim())) e.phone = "Enter 7 to 15 digits.";
+    if (!/^\+?[0-9][0-9 ]{6,14}$/.test(v.phone.trim())) e.phone = "Enter 7 to 15 digits, e.g. +91 98450 12345.";
     if (v.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) e.email = "Enter a valid email or leave it empty.";
   }
   if (!Object.keys(e).length) {
-    const n = sentBytes(format, v, password);
-    if (n > MAX_BYTES) e._size = "This message is " + n + " bytes" + (password ? " with the lock" : "") + ". Shorten it to " + MAX_BYTES + " bytes or less.";
+    const n = byteLength(pack(format, v));
+    if (n > MAX_BYTES) e._size = "This message is " + n + " bytes. Shorten it to " + MAX_BYTES + " bytes or less.";
   }
   return e;
 }
@@ -607,66 +456,7 @@ function summary(m) {
 // "text" -> "Text", "contact" -> "Contact card"
 const formatLabel = (id) => (FORMATS.find((f) => f.id === id) || FORMATS[0]).label;
 
-// A contact card as a vCard file, which phones open in their Contacts app.
-function toVCard(m) {
-  const esc = (s) => s.replace(/[\\,;]/g, (c) => "\\" + c);
-  const lines = ["BEGIN:VCARD", "VERSION:3.0", "FN:" + esc(m.name), "N:" + esc(m.name) + ";;;;", "TEL;TYPE=CELL:" + m.phone.replace(/\s/g, "")];
-  if (m.email) lines.push("EMAIL:" + m.email);
-  lines.push("END:VCARD");
-  return lines.join("\r\n") + "\r\n";
-}
-
-// Plain text for the Copy and Share buttons
-const asText = (m) => (m.format === "contact" ? [m.name, m.phone, m.email].filter(Boolean).join(", ") : m.text);
-
-// =====================================================================
-// Part 8  Password lock
-// =====================================================================
-
-// A locked message is encrypted with AES-GCM using the browser's Web Crypto.
-// The key is made from the password with PBKDF2 (100,000 rounds of SHA-256),
-// so guessing passwords is slow. AES-GCM also adds a 16-byte tag: a wrong
-// password or a changed byte makes decryption fail instead of giving rubbish.
-// Bytes sent: [0x00, 8-byte salt, 12-byte IV, encrypted text + 16-byte tag].
-// Text never starts with byte 0x00, so the receiver can tell the two apart.
-const LOCK_MARK = 0x00, SALT_LEN = 8, IV_LEN = 12, TAG_LEN = 16;
-const LOCK_OVERHEAD = 1 + SALT_LEN + IV_LEN + TAG_LEN;   // 37 bytes
-
-async function makeKey(password, salt) {
-  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
-    base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
-}
-
-// packed text + password -> bytes to send
-async function lock(text, password) {
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
-  const key = await makeKey(password, salt);
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(text)));
-  return Uint8Array.from([LOCK_MARK, ...salt, ...iv, ...ct]);
-}
-
-// received bytes + password -> packed text, or null if the password is wrong
-async function unlock(bytes, password) {
-  const salt = bytes.slice(1, 1 + SALT_LEN), iv = bytes.slice(1 + SALT_LEN, 1 + SALT_LEN + IV_LEN);
-  try {
-    const key = await makeKey(password, salt);
-    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, bytes.slice(1 + SALT_LEN + IV_LEN));
-    return new TextDecoder("utf-8", { fatal: true }).decode(pt);
-  } catch (e) { return null; }
-}
-
-const isLocked = (bytes) => bytes.length > LOCK_OVERHEAD && bytes[0] === LOCK_MARK;
-
-// received bytes -> packed text, or null if they are not valid UTF-8 text
-function readText(bytes) {
-  try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch (e) { return null; }
-}
-
 export {
-  MODES, SPEEDS, MAX_BYTES, NUM_TONES, toneHz, airTime, transmit, createReceiver,          // sound
-  encode as toneSequence,                                                                   // the tones of a message, for drawing
-  FORMATS, EMPTY, pack, validate, sentBytes, unpack, summary, formatLabel, toVCard, asText, // message formats
-  LOCK_OVERHEAD, lock, unlock, isLocked, readText                                          // password lock
+  MODES, MAX_BYTES, NUM_TONES, toneHz, airTime, transmit, createReceiver,       // sound
+  FORMATS, EMPTY, byteLength, pack, validate, unpack, summary, formatLabel      // message formats
 };

@@ -1,117 +1,32 @@
-/*
- * SoundDrop look, on top of Bootstrap 5.
- * The theme comes from the subject: a message is drawn as its real tones
- * (blue bars, amber START and END markers), technical readouts use a
- * monospace font, and the logo blue is the only accent colour.
- * Every colour is a variable, set once for light and once for dark mode.
- */
-
-/* ---------- colours ---------- */
+/* SoundDrop: a few additions to Bootstrap 5. Colours follow the app icon. */
 :root, [data-bs-theme="light"] {
-  --sd-bg: #f2f4f9;          /* page background: a cool, slightly blue grey */
-  --sd-surface: #ffffff;     /* cards and the navbar */
-  --sd-line: #dde3ee;
-  --sd-ink: #131b2e;
-  --sd-muted: #5a6479;
-  --sd-accent: #2f5bea;      /* the app icon's blue */
-  --sd-accent-dark: #2449c4;
-  --sd-accent-soft: #e5ebfd;
-  --sd-mark: #e39a2d;        /* START and END tones */
-  --sd-bar-off: #cfd6e4;     /* tones not played yet */
-  --sd-shadow: 0 1px 2px rgba(19, 27, 46, .05), 0 6px 18px rgba(19, 27, 46, .06);
+  --bs-primary: #2f5bea;
+  --bs-primary-rgb: 47, 91, 234;
+  --bs-link-color: #2f5bea;
+  --bs-link-color-rgb: 47, 91, 234;
 }
 [data-bs-theme="dark"] {
-  --sd-bg: #0c111d;
-  --sd-surface: #141b2b;
-  --sd-line: #253049;
-  --sd-ink: #e7ebf5;
-  --sd-muted: #9ba5bb;
-  --sd-accent: #7d9bff;
-  --sd-accent-dark: #9bb2ff;
-  --sd-accent-soft: #1b2850;
-  --sd-mark: #f0b44f;
-  --sd-bar-off: #2c3753;
-  --sd-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+  --bs-primary: #7d9bff;
+  --bs-primary-rgb: 125, 155, 255;
+  --bs-link-color: #7d9bff;
+  --bs-link-color-rgb: 125, 155, 255;
 }
+.btn-primary { --bs-btn-bg: var(--bs-primary); --bs-btn-border-color: var(--bs-primary); --bs-btn-hover-bg: #2449c4; --bs-btn-hover-border-color: #2449c4; --bs-btn-active-bg: #1f3fae; }
+.btn-outline-primary { --bs-btn-color: var(--bs-primary); --bs-btn-border-color: var(--bs-primary); --bs-btn-hover-bg: var(--bs-primary); --bs-btn-hover-border-color: var(--bs-primary); --bs-btn-active-bg: var(--bs-primary); --bs-btn-active-border-color: var(--bs-primary); }
+.progress-bar { background-color: var(--bs-primary); }
 
-/* hand the colours to Bootstrap */
-:root, [data-bs-theme] {
-  --bs-body-bg: var(--sd-bg);
-  --bs-body-color: var(--sd-ink);
-  --bs-secondary-color: var(--sd-muted);
-  --bs-border-color: var(--sd-line);
-  --bs-primary: var(--sd-accent);
-  --bs-link-color: var(--sd-accent);
-  --bs-border-radius: .6rem;
-}
-[data-bs-theme="light"], :root { --bs-primary-rgb: 47, 91, 234; --bs-link-color-rgb: 47, 91, 234; }
-[data-bs-theme="dark"] { --bs-primary-rgb: 125, 155, 255; --bs-link-color-rgb: 125, 155, 255; }
-.text-primary { color: var(--sd-accent) !important; }
-.sd-mono { font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace; font-size: .78rem; color: var(--sd-muted); }
-
-/* ---------- buttons ---------- */
-.btn { font-weight: 600; }
-.btn-primary { --bs-btn-bg: var(--sd-accent); --bs-btn-border-color: var(--sd-accent); --bs-btn-hover-bg: var(--sd-accent-dark); --bs-btn-hover-border-color: var(--sd-accent-dark); --bs-btn-active-bg: var(--sd-accent-dark); --bs-btn-active-border-color: var(--sd-accent-dark); --bs-btn-color: #fff; --bs-btn-hover-color: #fff; --bs-btn-active-color: #fff; }
-[data-bs-theme="dark"] .btn-primary { --bs-btn-color: #0c111d; --bs-btn-hover-color: #0c111d; --bs-btn-active-color: #0c111d; }
-.btn-outline-primary { --bs-btn-color: var(--sd-accent); --bs-btn-border-color: var(--sd-accent); --bs-btn-hover-bg: var(--sd-accent-soft); --bs-btn-hover-color: var(--sd-accent); --bs-btn-hover-border-color: var(--sd-accent); --bs-btn-active-bg: var(--sd-accent); --bs-btn-active-border-color: var(--sd-accent); --bs-btn-active-color: var(--sd-surface); }
-.btn-check:checked + .btn-outline-primary { background: var(--sd-accent); color: var(--sd-surface); }
-.btn:focus-visible, .form-control:focus { box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .3); border-color: var(--sd-accent); }
-
-/* ---------- surfaces ---------- */
-.card { --bs-card-bg: var(--sd-surface); --bs-card-border-color: var(--sd-line); border-radius: .9rem; box-shadow: var(--sd-shadow); }
-.form-control { background-color: var(--sd-surface); }
-.sd-nav { background: var(--sd-surface); border-bottom: 1px solid var(--sd-line); }
-.sd-navlink { white-space: nowrap; border-radius: 999px; padding: .25rem .7rem !important; color: var(--sd-muted); font-weight: 500; }
-.sd-navlink.active { background: var(--sd-accent-soft); color: var(--sd-accent) !important; font-weight: 600; }
-.sd-dot { display: inline-block; width: 8px; height: 8px; margin-left: 5px; border-radius: 50%; background: var(--bs-success); vertical-align: middle; }
-
-/* ---------- layout ---------- */
-.sd-container { max-width: 1040px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.sd-container { max-width: 760px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
 .sd-narrow { max-width: 560px; margin: 0 auto; }
-.sd-wide { max-width: 1000px; margin: 0 auto; }
 .d-contents { display: contents; }
-.sd-title { font-size: clamp(1.45rem, 1.1rem + 1.6vw, 2.4rem); font-weight: 800; letter-spacing: -.025em; line-height: 1.12; text-wrap: balance; }
-.sd-page-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; }
+.nav-link.active { color: var(--bs-primary); }
+.sd-dot { display: inline-block; width: 8px; height: 8px; margin-left: 4px; border-radius: 50%; background: var(--bs-success); vertical-align: middle; }
 
-/* ---------- the tone strip ---------- */
-.sd-strip { display: block; width: 100%; height: 26px; margin-top: 4px; }
-.sd-strip .on { fill: var(--sd-accent); }
-.sd-strip .off { fill: var(--sd-bar-off); }
-.sd-strip .mark { fill: var(--sd-mark); }
-.sd-figure { background: var(--sd-surface); border: 1px solid var(--sd-line); border-radius: .9rem; padding: .7rem .8rem .5rem; box-shadow: var(--sd-shadow); }
-.sd-figure .sd-strip { height: 44px; margin: 0 0 .35rem; }
+/* the big round Listen button */
+.sd-listen { width: 110px; height: 110px; border-radius: 50%; font-size: 1.3rem; font-weight: 600; }
+.sd-inbox { max-height: 120px; overflow-y: auto; }   /* the inbox scrolls inside its card, not the page */
+.form-range::-webkit-slider-thumb { background: var(--bs-primary); }
+.form-range::-moz-range-thumb { background: var(--bs-primary); }
 
-/* ---------- Home: numbered steps ---------- */
-.sd-steps { list-style: none; padding: 0; counter-reset: step; display: grid; gap: .35rem; font-size: .875rem; }
-.sd-steps li { counter-increment: step; display: grid; grid-template-columns: 1.6rem 1fr; column-gap: .5rem; align-items: baseline; color: var(--sd-muted); }
-.sd-steps li::before { content: counter(step); width: 1.6rem; height: 1.6rem; border-radius: 50%; display: grid; place-items: center; background: var(--sd-accent-soft); color: var(--sd-accent); font-weight: 700; font-size: .8rem; }
-.sd-steps strong { color: var(--sd-ink); }
-
-/* ---------- Receive: Listen button with rings while listening ---------- */
-.sd-listen-wrap { position: relative; display: inline-grid; place-items: center; }
-.sd-listen { width: 110px; height: 110px; border-radius: 50%; font-size: 1.3rem; position: relative; z-index: 1; }
-.sd-listen-on { background: var(--sd-accent-soft); color: var(--sd-accent); border: 2px solid var(--sd-accent); }
-.sd-listen-on:hover { background: var(--sd-accent-soft); color: var(--sd-accent-dark); border-color: var(--sd-accent-dark); }
-.sd-listen-wrap.is-on::before, .sd-listen-wrap.is-on::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--sd-accent); opacity: 0; animation: sd-ring 2.4s ease-out infinite; }
-.sd-listen-wrap.is-on::after { animation-delay: 1.2s; }
-.sd-listen-wrap.is-rx::before, .sd-listen-wrap.is-rx::after { border-color: var(--sd-mark); animation-duration: 1.2s; }
-@keyframes sd-ring { from { transform: scale(1); opacity: .55; } to { transform: scale(1.45); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .sd-listen-wrap.is-on::before { animation: none; opacity: .4; transform: scale(1.15); } .sd-listen-wrap.is-on::after { animation: none; } }
-.sd-signal { max-width: 300px; margin: .35rem auto 0; }
-.sd-meter { height: 4px; border-radius: 4px; background: var(--sd-bar-off); overflow: hidden; margin-top: 3px; }
-.sd-meter > div { height: 100%; background: var(--sd-accent); transition: width .2s; }
-
-/* ---------- Receive: inbox ---------- */
-.list-group { --bs-list-group-bg: transparent; --bs-list-group-border-color: var(--sd-line); --bs-list-group-action-hover-bg: var(--sd-accent-soft); }
-.sd-inbox { max-height: 120px; overflow-y: auto; }    /* scrolls inside its card, not the page */
-.sd-inbox .active-item { font-weight: 600; color: var(--sd-accent); }
-
-.form-range::-webkit-slider-thumb { background: var(--sd-accent); }
-.form-range::-moz-range-thumb { background: var(--sd-accent); }
-
-/* ---------- small phones: everything still fits on one screen ---------- */
-@media (max-width: 380px) { .navbar-brand { font-size: 1.1rem; margin-right: 0; } .sd-navlink { padding: .2rem .5rem !important; } }
-@media (max-height: 700px) { .sd-listen { width: 88px; height: 88px; font-size: 1.1rem; } .sd-figure .sd-strip { height: 28px; margin-bottom: .2rem; } .sd-figure { padding: .5rem .7rem .35rem; } .sd-lead { font-size: .9rem; } }
-@media (max-width: 576px) { .sd-title { font-size: 1.3rem; } .sd-steps { gap: .2rem; font-size: .82rem; } .sd-steps li { grid-template-columns: 1.35rem 1fr; } .sd-steps li::before { width: 1.35rem; height: 1.35rem; font-size: .72rem; } }
-@media (max-height: 700px) { .card-body.p-3 { padding: .75rem !important; } .sd-page-title { font-size: 1.3rem; } }
-@media (min-width: 992px) { .sd-rx-side { padding-top: 2.6rem; } .sd-home { min-height: calc(100vh - 160px); } }
+/* small phones: everything still fits on one screen */
+@media (max-width: 380px) { .navbar-brand { font-size: 1.1rem; margin-right: 0; } }
+@media (max-height: 700px) { .sd-listen { width: 88px; height: 88px; font-size: 1.1rem; } }
