@@ -1,6 +1,6 @@
 /*
- * modem.js: everything that turns a message into sound and back.
- * It has no React in it, so it can be tested on its own.
+ * modem.js: the sound engine. Everything that turns a message into sound and back.
+ * It does not touch the page, so it can be tested on its own; app.js uses it.
  *
  *  Part 1  Settings: the 19 tones, timing, the two modes
  *  Part 2  CRC-16 checksum
@@ -8,7 +8,7 @@
  *  Part 4  Detector: decides which tone is playing (state machine)
  *  Part 5  AudioWorklet: FFT on the browser's audio thread, feeds the detector
  *  Part 6  Receiver: decodeFrame() tones -> text, createReceiver() wires it up
- *  Part 7  Message formats: text or contact card, validation, pack / unpack
+ *  Part 7  Message formats: text or contact card, pack / unpack
  *
  * How the sound carries data (19-tone MFSK, one tone per symbol, 100 ms each):
  *   tones 0..15 -> one 4-bit value (a "nibble") each, so one byte = 2 tones
@@ -387,76 +387,29 @@ async function createReceiver(ctx, source, handlers) {
 
 // Before a message becomes sound it is packed into one string: a type letter,
 // ":" and the fields joined by the ASCII unit separator (0x1F), a character
-// people cannot type by accident.
-//   T:<text>                      a text message
-//   C:<name>\u001f<phone>\u001f<email>   a contact card
-
+// people cannot type by accident. The form checks themselves are done by the
+// browser (HTML5 required, minlength, pattern, type="email").
+//   T:<text>                             a text message
+//   C:<name>\u001f<phone>\u001f<email>    a contact card
 const SEP = "\u001f";
-
-// The formats offered on the Send page
-const FORMATS = [
-  { id: "text", code: "T", label: "Text", hint: "A short sentence or note" },
-  { id: "contact", code: "C", label: "Contact card", hint: "Name, phone and email" }
-];
-
-// Empty form values for each format
-const EMPTY = {
-  text: { text: "" },
-  contact: { name: "", phone: "", email: "" }
-};
 
 // Size in UTF-8 bytes (what the 120-byte limit counts)
 const byteLength = (s) => new TextEncoder().encode(s).length;
 
 // form values -> packed string
 function pack(format, v) {
-  switch (format) {
-    case "text": return "T:" + v.text.trim();
-    case "contact": return "C:" + [v.name.trim(), v.phone.trim(), v.email.trim()].join(SEP);
-    default: throw new Error("Unknown format");
-  }
+  if (format === "contact") return "C:" + [v.name.trim(), v.phone.trim(), v.email.trim()].join(SEP);
+  return "T:" + v.text.trim();
 }
 
-// Returns { field: "message" } for every field that is wrong; empty when valid.
-function validate(format, v) {
-  const e = {};
-  if (format === "text") {
-    if (!v.text.trim()) e.text = "Type a message to send.";
-  }
-  if (format === "contact") {
-    const nm = v.name.trim();
-    if (nm.length < 2) e.name = "Enter at least 2 letters.";
-    if (!/^\+?[0-9][0-9 ]{6,14}$/.test(v.phone.trim())) e.phone = "Enter 7 to 15 digits, e.g. +91 98450 12345.";
-    if (v.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) e.email = "Enter a valid email or leave it empty.";
-  }
-  if (!Object.keys(e).length) {
-    const n = byteLength(pack(format, v));
-    if (n > MAX_BYTES) e._size = "This message is " + n + " bytes. Shorten it to " + MAX_BYTES + " bytes or less.";
-  }
-  return e;
-}
-
-// Unpack a received text. Anything without a known prefix is shown as text.
+// received string -> { format, text } or { format, name, phone, email }
 function unpack(raw) {
   const code = raw.slice(0, 2), body = raw.slice(2);
-  if (code === "T:") return { format: "text", text: body };
   if (code === "C:") {
     const [name = "", phone = "", email = ""] = body.split(SEP);
     return { format: "contact", name, phone, email };
   }
-  return { format: "text", text: raw };
+  return { format: "text", text: code === "T:" ? body : raw };
 }
 
-// One line for the inbox
-function summary(m) {
-  if (m.format === "contact") return "Contact: " + m.name;
-  return m.text;
-}
-
-// "text" -> "Text", "contact" -> "Contact card"
-const formatLabel = (id) => (FORMATS.find((f) => f.id === id) || FORMATS[0]).label;
-
-export {
-  MODES, MAX_BYTES, NUM_TONES, toneHz, airTime, transmit, createReceiver,       // sound
-  FORMATS, EMPTY, byteLength, pack, validate, unpack, summary, formatLabel      // message formats
-};
+export { MODES, MAX_BYTES, NUM_TONES, toneHz, airTime, transmit, createReceiver, byteLength, pack, unpack };
