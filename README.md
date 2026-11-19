@@ -20,46 +20,42 @@ Bhajanth V (2RUA26CSE0021), B.Tech CSE, Section A. Guide: Soujanya K V.
 - **Works offline and installs as an app** (Service Worker + web app manifest)
 - Compact Bootstrap layout: every page fits on one phone screen, light and dark mode
 
+## Built with as little JavaScript as possible
+
+| Job | Done by |
+|---|---|
+| The three pages and moving between them | HTML sections + CSS `:target` (no JavaScript) |
+| Showing the fields for Text or Contact card, and the hint for each mode | CSS `:has()` (no JavaScript) |
+| Checking the form (required, length, phone pattern, email) | HTML5 validation + Bootstrap styles (no JavaScript) |
+| Look, layout, light and dark colours | Bootstrap 5 + `style.css` |
+| Making and hearing sound, FFT, checksum | JavaScript: `modem.js` |
+| Size meter, status, received message, inbox, progress | JavaScript: `app.js` |
+
+There is no framework and no build step: GitHub Pages serves these files exactly as they are.
+
 ## Files
-
-The repository has two parts: the **source code** in `app/`, and the **built website** in the root
-folder, which is what GitHub Pages serves. Edit only `app/`; `npm run build` writes the root files.
-
-### Source code (`app/`)
 
 | File | What it does |
 |---|---|
-| `app/src/modem.js` | **The heart of the project.** Everything that turns a message into sound and back: the tone settings, CRC-16, `encode()` / `transmit()` (sender), the detector, the FFT in an AudioWorklet, `decodeFrame()` / `createReceiver()` (receiver), and the two message formats (text, contact card) with validation. |
-| `app/src/SoundDropContext.jsx` | The audio engine shared by all pages (React Context): one AudioContext, `send()`, listening on the microphone, the inbox. |
-| `app/src/pages.jsx` | The three pages (Home, Send, Receive) and their small parts: form field, toggle buttons, message card, Install card. |
-| `app/src/main.jsx` | Where the app starts: light/dark mode, the install offer, page routing (`#/send`), the navbar, and the Service Worker. |
-| `app/src/app.css` | The few styles added to Bootstrap: accent colour, round Listen button, small-screen rules. |
-| `app/index.html` | The single HTML page; React draws the app into it. |
-| `app/public/sw.js` | Service Worker: saves the app's files so it opens offline. |
-| `app/public/manifest.webmanifest` | App name, icons and colours, so the site can be installed like an app. |
-| `app/public/icon.svg`, `app/public/icons/` | The logo and the app icons (192 px, 512 px, iPhone). |
-| `app/vite.config.js` | Build settings: builds straight into the repository root with fixed file names. |
-| `app/package.json`, `app/package-lock.json` | The libraries used (React, Bootstrap, Vite), their exact versions, and the `dev` / `build` commands. |
-| `app/.gitignore` | Keeps `node_modules/` out of Git. |
-
-### Built website (repository root, written by `npm run build`)
-
-| File | What it is |
-|---|---|
-| `index.html` | The built page that GitHub Pages serves. |
-| `assets/app.js`, `assets/app.css` | All the JavaScript and all the CSS, each bundled into one file. |
-| `sw.js`, `manifest.webmanifest`, `icon.svg`, `icons/` | Copies of the files in `app/public/`. |
+| `index.html` | The whole app: navbar, the Home, Send and Receive sections, the Send form with its HTML5 checks, and templates for a received message. |
+| `style.css` | The few styles added to Bootstrap: accent colour, page switching with `:target`, format and mode switching with `:has()`, round Listen button, small-screen rules. |
+| `bootstrap.min.css` | Bootstrap 5.3.3, kept in the project so the app also works offline. |
+| `modem.js` | **The sound engine.** Tone settings, CRC-16, `encode()` / `transmit()` (sender), the detector, the FFT in an AudioWorklet, `decodeFrame()` / `createReceiver()` (receiver), and `pack()` / `unpack()` for the two message formats. |
+| `app.js` | Connects the page to the sound engine: size meter, sending and its progress, listening, status, the received message and the inbox; registers the Service Worker. |
+| `sw.js` | Service Worker: saves the app's files so it opens offline. |
+| `manifest.webmanifest` | App name, icons and colours, so the site can be installed like an app. |
+| `icon.svg`, `icons/` | The logo and the app icons (192 px, 512 px, iPhone). |
 | `.nojekyll` | Tells GitHub Pages to serve the files exactly as they are. |
-| `README.md` | This file. |
 
-## Build
+## Run it locally
+
+Any static web server works, for example:
 
 ```
-cd app
-npm install
-npm run dev      # development server
-npm run build    # builds the website into the repository root
+python -m http.server 8000
 ```
+
+then open http://localhost:8000. (The microphone needs `localhost` or HTTPS.)
 
 ## How the signal works
 
