@@ -57,14 +57,14 @@ const LINKS = [["home", "Home", "#/"], ["send", "Send", "#/send"], ["receive", "
 function NavBar({ route }) {
   const { listening } = useSoundDrop();          // green dot next to Receive while the microphone is on
   return (
-    <nav className="navbar py-1 border-bottom bg-body sticky-top">
+    <nav className="navbar py-2 sd-nav sticky-top">
       <div className="container sd-container flex-nowrap">
         <a className="navbar-brand fw-bold d-flex align-items-center gap-2" href="#/">
           <img src="./icon.svg" width="26" height="26" alt="" /> SoundDrop
         </a>
         <div className="d-flex gap-1">
           {LINKS.map(([id, label, href]) => (
-            <a key={id} href={href} className={"nav-link px-1 px-sm-2" + (route === id ? " active fw-semibold" : "")} aria-current={route === id ? "page" : undefined}>
+            <a key={id} href={href} className={"nav-link sd-navlink" + (route === id ? " active" : "")} aria-current={route === id ? "page" : undefined}>
               {label}{id === "receive" && listening && <span className="sd-dot" title="Listening" />}
             </a>
           ))}
@@ -83,7 +83,7 @@ function App() {
   return (
     <SoundDropProvider>
       <NavBar route={route} />
-      <main className="container sd-container py-2">
+      <main className="container sd-container py-2 py-lg-4">
         <Page />
       </main>
     </SoundDropProvider>

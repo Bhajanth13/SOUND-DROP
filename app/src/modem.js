@@ -666,6 +666,7 @@ function readText(bytes) {
 
 export {
   MODES, SPEEDS, MAX_BYTES, NUM_TONES, toneHz, airTime, transmit, createReceiver,          // sound
+  encode as toneSequence,                                                                   // the tones of a message, for drawing
   FORMATS, EMPTY, pack, validate, sentBytes, unpack, summary, formatLabel, toVCard, asText, // message formats
   LOCK_OVERHEAD, lock, unlock, isLocked, readText                                          // password lock
 };

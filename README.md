@@ -21,7 +21,7 @@ Bhajanth V (2RUA26CSE0021), B.Tech CSE, Section A. Guide: Soujanya K V.
 - **Receive** with automatic mode detection, signal strength and a saved inbox
 - **Use what you receive:** copy it, share it, or save a contact card to the phone's contacts (.vcf)
 - **Works offline and installs as an app** (Service Worker + web app manifest)
-- Compact Bootstrap layout: every page fits on one phone screen, light and dark mode
+- **New look (Bootstrap 5 + custom CSS):** the message is drawn as its real tones (a strip that fills while sending), a Listen button with rings while listening, a signal meter, two-column pages on laptops; every page fits on one phone screen, light and dark mode
 
 ## Files
 
@@ -36,7 +36,7 @@ folder, which is what GitHub Pages serves. Edit only `app/`; `npm run build` wri
 | `app/src/SoundDropContext.jsx` | The audio engine shared by all pages (React Context): one AudioContext, `send()`, listening on the microphone, the saved inbox, opening locked messages. |
 | `app/src/pages.jsx` | The three pages (Home, Send, Receive) and their small parts: form field, toggle buttons, message card with Copy / Save contact / Share, locked-message card, Install card. |
 | `app/src/main.jsx` | Where the app starts: light/dark mode, the install offer, page routing (`#/send`), the navbar, and the Service Worker. |
-| `app/src/app.css` | The few styles added to Bootstrap: accent colour, round Listen button, small-screen rules. |
+| `app/src/app.css` | The look on top of Bootstrap: light and dark colour variables, the tone strip, numbered steps, the Listen button and its rings, the signal meter, small-screen rules. |
 | `app/index.html` | The single HTML page; React draws the app into it. |
 | `app/public/sw.js` | Service Worker: saves the app's files so it opens offline. |
 | `app/public/manifest.webmanifest` | App name, icons and colours, so the site can be installed like an app. |

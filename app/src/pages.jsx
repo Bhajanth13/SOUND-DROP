@@ -5,9 +5,10 @@
  *   SendPage     form (text or contact card), mode, speed, password, volume, Send button
  *   ReceivePage  Listen button, status, received message, saved inbox
  *
- *   Helpers: Field (form input with error), Choice (toggle buttons),
- *            MessageCard (one received message + Copy / Save contact / Share),
- *            LockedCard (password box for a locked message), InstallApp (Install card)
+ *   Helpers: ToneStrip (a message drawn as its real tones), Field (form input
+ *            with error), Choice (toggle buttons), MessageCard (one received
+ *            message + Copy / Save contact / Share), LockedCard (password box
+ *            for a locked message), InstallApp (Install card)
  *
  * The pages only show things and react to taps. All sound work is done by the
  * engine in SoundDropContext.jsx, reached with useSoundDrop().
@@ -15,53 +16,87 @@
 
 import { useEffect, useState } from "react";
 import { useSoundDrop } from "./SoundDropContext.jsx";
-import { MODES, SPEEDS, MAX_BYTES, NUM_TONES, toneHz, airTime, FORMATS, EMPTY, pack, validate, sentBytes, summary, formatLabel, toVCard, asText } from "./modem.js";
+import { MODES, SPEEDS, MAX_BYTES, NUM_TONES, toneHz, airTime, toneSequence, FORMATS, EMPTY, pack, validate, sentBytes, summary, formatLabel, toVCard, asText } from "./modem.js";
+
+// =====================================================================
+// ToneStrip: a message drawn as the tones it will be played as
+// =====================================================================
+
+// One thin bar per tone, as tall as the tone's number (0 to 15); START and END
+// are full height in amber. With progress (0 to 1) the bars already played are
+// blue and the rest grey, so the strip doubles as the sending progress bar.
+function ToneStrip({ tones, progress = null, label }) {
+  const n = Math.max(tones.length, 1);
+  return (
+    <svg className="sd-strip" viewBox={`0 0 ${n * 3} 20`} preserveAspectRatio="none" role="img" aria-label={label}>
+      {tones.map((t, i) => {
+        const mark = t >= 17, h = mark ? 20 : 3 + (Math.min(t, 16) / 16) * 15;
+        const cls = mark ? "mark" : progress === null || i / n < progress ? "on" : "off";
+        return <rect key={i} x={i * 3} y={20 - h} width="2" height={h} className={cls} />;
+      })}
+    </svg>
+  );
+}
+
+// The tones for a form's content. A locked message is encrypted bytes, which
+// look random, so its strip is drawn from random-looking bytes of the same length.
+function previewTones(text, lockedBytes) {
+  try {
+    if (!lockedBytes) return toneSequence(text);
+    let s = lockedBytes * 7919;
+    return toneSequence(Uint8Array.from({ length: lockedBytes }, () => (s = (s * 1103515245 + 12345) >>> 0) >>> 24));
+  } catch (e) { return []; }                        // empty or too long: no strip
+}
 
 // =====================================================================
 // Home page
 // =====================================================================
 
 const STEPS = [
-  ["Type", "a short message or a contact card, with an optional password."],
-  ["Encode", "every 4 bits become one of 16 tones, plus repair bytes and a checksum."],
-  ["Play", "the speaker plays the tones."],
-  ["Decode", "listening phones run an FFT and show the message."]
+  ["Type", "a message or a contact card."],
+  ["Encode", "every 4 bits become one of 16 tones."],
+  ["Play", "them through the speaker."],
+  ["Decode", "with an FFT on the other phone."]
 ];
 const khz = (hz) => (hz / 1000).toFixed(1);
+const HI = toneSequence("T:Hi");                    // the hero picture: "Hi" as it is really sent
 
 export function HomePage() {
   return (
-    <div className="sd-narrow vstack gap-2">
-      <section>
-        <h1 className="h4 fw-bold mb-1">Share a message with everyone nearby using only sound.</h1>
-        <p className="text-body-secondary mb-2">No internet, Wi-Fi, Bluetooth or pairing. Works offline, with an optional password.</p>
+    <div className="sd-wide sd-home row g-3 g-lg-5 align-items-start align-items-lg-center">
+      <section className="col-lg-6 vstack gap-2 align-self-lg-center">
+        <h1 className="sd-title mb-0">Share a message with everyone nearby, using only sound.</h1>
+        <p className="text-body-secondary mb-0 sd-lead">No internet, Wi-Fi, Bluetooth or pairing. Works offline, with an optional password.</p>
+        <figure className="sd-figure mb-0">
+          <ToneStrip tones={HI} label="The message Hi drawn as its tones" />
+          <figcaption className="sd-mono">“Hi” as SoundDrop plays it: {HI.length} tones</figcaption>
+        </figure>
         <div className="d-flex gap-2">
           <a className="btn btn-primary flex-fill" href="#/send">Send a message</a>
           <a className="btn btn-outline-primary flex-fill" href="#/receive">Receive</a>
         </div>
       </section>
 
-      <section>
-        <h2 className="h6 mb-1">How it works</h2>
-        <ol className="small mb-0 ps-3">
-          {STEPS.map(([title, text]) => <li key={title}><strong>{title}:</strong> {text}</li>)}
+      <section className="col-lg-6 vstack gap-2 align-self-lg-center">
+        <ol className="sd-steps mb-0">
+          {STEPS.map(([title, text]) => <li key={title}><span><strong>{title}</strong> {text}</span></li>)}
         </ol>
+
+        {/* one card per mode; the frequency range is computed from the modem's own numbers */}
+        <div className="row g-2">
+          {Object.values(MODES).map((m) => (
+            <div className="col-6" key={m.id}>
+              <div className="card h-100"><div className="card-body p-2 small">
+                <strong>{m.label}</strong> <span className="sd-mono text-primary">{khz(toneHz(m, 0))}–{khz(toneHz(m, NUM_TONES - 1))} kHz</span>
+                <div className="text-body-secondary">{m.id === "audible" ? "Most reliable." : "Above adult hearing."}</div>
+              </div></div>
+            </div>
+          ))}
+        </div>
+
+        <InstallApp />
+        <p className="small text-body-secondary mb-0">CS1309 mini project, Bhajanth V, RV University</p>
       </section>
-
-      {/* one card per mode; the frequency range is computed from the modem's own numbers */}
-      <div className="row g-2">
-        {Object.values(MODES).map((m) => (
-          <div className="col-6" key={m.id}>
-            <div className="card h-100"><div className="card-body p-2 small">
-              <strong>{m.label}</strong> <span className="text-body-secondary">{khz(toneHz(m, 0))}–{khz(toneHz(m, NUM_TONES - 1))} kHz</span>
-              <div className="text-body-secondary">{m.id === "audible" ? "A short chirp. Most reliable, across a room." : "Above adult hearing. Best within 1–2 m."}</div>
-            </div></div>
-          </div>
-        ))}
-      </div>
-
-      <InstallApp />
-      <p className="small text-body-secondary mb-0">CS1309 mini project · Bhajanth V, RV University</p>
     </div>
   );
 }
@@ -145,6 +180,7 @@ export function SendPage() {
   const errors = validate(format, v, password);
   const valid = Object.keys(errors).length === 0;
   const bytes = sentBytes(format, v, password);               // includes the lock's extra bytes
+  const tones = previewTones(pack(format, v), password ? bytes : 0);
   const err = (k) => (tried ? errors[k] : undefined);
   const set = (k) => (e) => setValues({ ...values, [format]: { ...v, [k]: e.target.value } });
 
@@ -157,7 +193,7 @@ export function SendPage() {
 
   return (
     <form noValidate onSubmit={onSubmit} className="sd-narrow vstack gap-2">
-      <h1 className="h4 mb-0">Send <small className="fs-6 fw-normal text-body-secondary">Tap Listen on the other phone first.</small></h1>
+      <h1 className="sd-page-title mb-0">Send <small className="fs-6 fw-normal text-body-secondary">Tap Listen on the other phone first.</small></h1>
 
       <div className="card"><div className="card-body p-3 vstack gap-2">
         <Choice name="format" options={FORMATS} value={format} onChange={(f) => { setFormat(f); setTried(false); }} />
@@ -173,15 +209,13 @@ export function SendPage() {
           </>
         )}
 
-        {/* size meter: bytes used of 120, and how long the message will take to play */}
+        {/* size meter: the message drawn as its tones; while sending, the played part turns blue */}
         <div>
-          <div className="d-flex justify-content-between small text-body-secondary">
-            <span className={bytes > MAX_BYTES ? "text-danger" : ""}>{bytes} of {MAX_BYTES} bytes{password ? " (lock included)" : ""}</span>
+          <div className="d-flex justify-content-between sd-mono">
+            <span className={bytes > MAX_BYTES ? "text-danger" : ""}>{bytes} of {MAX_BYTES} bytes{password ? ", locked" : ""}</span>
             <span>about {airTime(bytes, speed).toFixed(1)} s</span>
           </div>
-          <div className="progress" style={{ height: 4 }}>
-            <div className={"progress-bar" + (bytes > MAX_BYTES ? " bg-danger" : "")} style={{ width: Math.min(100, (bytes / MAX_BYTES) * 100) + "%" }} />
-          </div>
+          <ToneStrip tones={tones} progress={sending ? sending.progress : null} label={"The message as " + tones.length + " tones"} />
           {err("_size") && <div className="text-danger small mt-1">{errors._size}</div>}
         </div>
 
@@ -215,9 +249,6 @@ export function SendPage() {
       <button type="submit" className={"btn btn-lg w-100 " + (sending ? "btn-danger" : "btn-primary")}>
         {sending ? "Stop sending" : password ? "Send locked message" : "Send through sound"}
       </button>
-      <div className="progress" style={{ height: 4 }} aria-hidden="true">
-        <div className="progress-bar" style={{ width: (sending ? sending.progress * 100 : 0) + "%" }} />
-      </div>
       {tried && !valid && <p className="text-danger small mb-0">Fix the highlighted field first.</p>}
     </form>
   );
@@ -310,23 +341,33 @@ export function ReceivePage() {
     : "Listening (Audible and Silent)…";
 
   return (
-    <div className="sd-narrow vstack gap-2">
-      <h1 className="h4 mb-0">Receive</h1>
+    <div className="sd-wide row g-2 g-lg-4 align-items-start">
+      <div className="col-lg-5 vstack gap-2">
+      <h1 className="sd-page-title mb-0">Receive</h1>
 
-      {/* the big round Listen / Stop button and the live status */}
+      {/* the big round Listen / Stop button with rings while listening, and the live status */}
       <div className="card"><div className="card-body p-3 text-center">
-        <button type="button" className={"btn sd-listen " + (listening ? "btn-danger" : "btn-primary")} onClick={listening ? stopListening : startListening}>
-          {listening ? "Stop" : "Listen"}
-        </button>
-        <p className="mt-2 mb-0" aria-live="polite">{statusText}</p>
-        {listening && <p className="small text-body-secondary mb-0">{signal > 3 ? "Signal: " + signal + " dB above background noise" : "No tones heard yet"}</p>}
+        <div className={"sd-listen-wrap" + (listening ? " is-on" : "") + (status === "receiving" ? " is-rx" : "")}>
+          <button type="button" className={"btn sd-listen " + (listening ? "sd-listen-on" : "btn-primary")} onClick={listening ? stopListening : startListening}>
+            {listening ? "Stop" : "Listen"}
+          </button>
+        </div>
+        <p className="mt-2 mb-0 fw-semibold" aria-live="polite">{statusText}</p>
+        {listening && (
+          <div className="sd-signal">
+            <span className="sd-mono">{signal > 3 ? "Signal " + signal + " dB above background noise" : "No tones heard yet"}</span>
+            <div className="sd-meter"><div style={{ width: Math.min(100, Math.max(0, signal || 0) * 1.25) + "%" }} /></div>
+          </div>
+        )}
         {micError && <div className="alert alert-danger mt-2 mb-0 small">{micError}</div>}
       </div></div>
+      </div>
 
+      <div className="col-lg-7 vstack gap-2 sd-rx-side">
       {/* result: nothing yet, receiving, received, or failed */}
       <div className="card" aria-live="polite"><div className="card-body p-3">
         {(!result || (result.ok === true && !shown)) && <p className="text-body-secondary mb-0">No message yet. Press Send on the other phone.</p>}
-        {result && result.ok === null && <p className="mb-0">Receiving… {tones} tones so far</p>}
+        {result && result.ok === null && <p className="mb-0 sd-receiving">Receiving… <span className="sd-mono">{tones} tones so far</span></p>}
         {shown && (shown.locked ? <LockedCard key={shown.id} item={shown} /> : <MessageCard key={shown.id} item={shown} />)}
         {result && result.ok === false && <p className="text-danger mb-0"><strong>Message not received.</strong> {result.error} Try again, a little closer or louder.</p>}
       </div></div>
@@ -348,6 +389,7 @@ export function ReceivePage() {
           ))}
         </div>
       </div></div>
+      </div>
     </div>
   );
 }
