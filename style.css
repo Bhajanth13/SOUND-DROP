@@ -34,6 +34,9 @@ body.listening .sd-dot { display: inline-block; }
 /* "Fix the highlighted field" appears only after a Send with a wrong field */
 .sd-fix { display: none; }
 .was-validated:invalid .sd-fix { display: block; }
+/* only wrong fields are marked; correct ones keep their normal look */
+.was-validated .form-control:valid { border-color: var(--bs-border-color); background-image: none; padding-right: .75rem; }
+.was-validated .form-control:valid:focus { border-color: #86b7fe; box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .25); }
 
 /* the big round Listen button */
 .sd-listen { width: 110px; height: 110px; border-radius: 50%; font-size: 1.3rem; font-weight: 600; }
