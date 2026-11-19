@@ -15,8 +15,11 @@ Bhajanth V (2RUA26CSE0021), B.Tech CSE, Section A. Guide: Soujanya K V.
 ## Features
 
 - **Send** a text message or a contact card, with form validation and a 120-byte limit
-- **Audible** (1,500–4,038 Hz) and **Silent** (17,500–19,192 Hz) modes
-- **Receive** with automatic mode detection, signal strength and an inbox
+- **Audible** (1,500–4,038 Hz) and **Silent** (17,500–19,192 Hz) modes, at **Normal** or **Fast** speed
+- **Password lock:** optional AES-GCM encryption; only someone with the password can open the message
+- **Error correction:** Reed-Solomon repairs up to 4 misheard bytes before the CRC-16 check
+- **Receive** with automatic mode detection, signal strength and a saved inbox
+- **Use what you receive:** copy it, share it, or save a contact card to the phone's contacts (.vcf)
 - **Works offline and installs as an app** (Service Worker + web app manifest)
 - Compact Bootstrap layout: every page fits on one phone screen, light and dark mode
 
@@ -29,9 +32,9 @@ folder, which is what GitHub Pages serves. Edit only `app/`; `npm run build` wri
 
 | File | What it does |
 |---|---|
-| `app/src/modem.js` | **The heart of the project.** Everything that turns a message into sound and back: the tone settings, CRC-16, `encode()` / `transmit()` (sender), the detector, the FFT in an AudioWorklet, `decodeFrame()` / `createReceiver()` (receiver), and the two message formats (text, contact card) with validation. |
-| `app/src/SoundDropContext.jsx` | The audio engine shared by all pages (React Context): one AudioContext, `send()`, listening on the microphone, the inbox. |
-| `app/src/pages.jsx` | The three pages (Home, Send, Receive) and their small parts: form field, toggle buttons, message card, Install card. |
+| `app/src/modem.js` | **The heart of the project.** Everything that turns a message into sound and back: the tone settings and speeds, CRC-16 and Reed-Solomon, `encode()` / `transmit()` (sender), the detector, the FFT in an AudioWorklet, `decodeFrame()` / `createReceiver()` (receiver), the two message formats with validation and vCard, and the password lock (Web Crypto). |
+| `app/src/SoundDropContext.jsx` | The audio engine shared by all pages (React Context): one AudioContext, `send()`, listening on the microphone, the saved inbox, opening locked messages. |
+| `app/src/pages.jsx` | The three pages (Home, Send, Receive) and their small parts: form field, toggle buttons, message card with Copy / Save contact / Share, locked-message card, Install card. |
 | `app/src/main.jsx` | Where the app starts: light/dark mode, the install offer, page routing (`#/send`), the navbar, and the Service Worker. |
 | `app/src/app.css` | The few styles added to Bootstrap: accent colour, round Listen button, small-screen rules. |
 | `app/index.html` | The single HTML page; React draws the app into it. |
@@ -66,8 +69,10 @@ npm run build    # builds the website into the repository root
 | Part | Detail |
 |---|---|
 | Modulation | 19-tone MFSK: 16 tones carry 4 bits each, plus REPEAT, START and END |
-| Speed | 100 ms per tone: 40 bits per second |
-| Frame | START, 0.6 s calibration sweep and sync, length byte, UTF-8 payload (up to 120 bytes), CRC-16, END |
+| Speed | Normal: 100 ms per tone, 40 bits per second. Fast: 50 ms per tone, 80 bits per second |
+| Frame | START, 0.6 s calibration sweep and sync, length byte, payload (up to 120 bytes), CRC-16, 8 Reed-Solomon bytes, END |
+| Error correction | Reed-Solomon over GF(256), 8 repair bytes: fixes up to 4 wrong bytes; the CRC-16 then confirms the message |
+| Password lock | AES-GCM 256-bit, key from the password with PBKDF2 (100,000 rounds, SHA-256); adds 37 bytes |
 | Calibration | The receiver measures how loud each tone arrives and boosts weak tones |
 | Receiver | AudioWorklet running a 1,024-point FFT every 5 ms on the audio thread |
 | Clock | None needed: a repeated value is sent as REPEAT, so every tone change is a new symbol |

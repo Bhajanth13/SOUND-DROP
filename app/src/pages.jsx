@@ -2,11 +2,12 @@
  * pages.jsx: the three pages of SoundDrop and the small pieces they use.
  *
  *   HomePage     what SoundDrop does, how it works, the two modes, Install card
- *   SendPage     form (text or contact card), mode, volume, Send button
- *   ReceivePage  Listen button, status, received message, inbox
+ *   SendPage     form (text or contact card), mode, speed, password, volume, Send button
+ *   ReceivePage  Listen button, status, received message, saved inbox
  *
  *   Helpers: Field (form input with error), Choice (toggle buttons),
- *            MessageCard (one received message), InstallApp (Install card)
+ *            MessageCard (one received message + Copy / Save contact / Share),
+ *            LockedCard (password box for a locked message), InstallApp (Install card)
  *
  * The pages only show things and react to taps. All sound work is done by the
  * engine in SoundDropContext.jsx, reached with useSoundDrop().
@@ -14,15 +15,15 @@
 
 import { useEffect, useState } from "react";
 import { useSoundDrop } from "./SoundDropContext.jsx";
-import { MODES, MAX_BYTES, NUM_TONES, toneHz, airTime, FORMATS, EMPTY, pack, validate, byteLength, summary, formatLabel } from "./modem.js";
+import { MODES, SPEEDS, MAX_BYTES, NUM_TONES, toneHz, airTime, FORMATS, EMPTY, pack, validate, sentBytes, summary, formatLabel, toVCard, asText } from "./modem.js";
 
 // =====================================================================
 // Home page
 // =====================================================================
 
 const STEPS = [
-  ["Type", "a short message or a contact card."],
-  ["Encode", "every 4 bits become one of 16 tones, plus a checksum."],
+  ["Type", "a short message or a contact card, with an optional password."],
+  ["Encode", "every 4 bits become one of 16 tones, plus repair bytes and a checksum."],
   ["Play", "the speaker plays the tones."],
   ["Decode", "listening phones run an FFT and show the message."]
 ];
@@ -33,7 +34,7 @@ export function HomePage() {
     <div className="sd-narrow vstack gap-2">
       <section>
         <h1 className="h4 fw-bold mb-1">Share a message with everyone nearby using only sound.</h1>
-        <p className="text-body-secondary mb-2">No internet, Wi-Fi, Bluetooth or pairing. Works in airplane mode.</p>
+        <p className="text-body-secondary mb-2">No internet, Wi-Fi, Bluetooth or pairing. Works offline, with an optional password.</p>
         <div className="d-flex gap-2">
           <a className="btn btn-primary flex-fill" href="#/send">Send a message</a>
           <a className="btn btn-outline-primary flex-fill" href="#/receive">Receive</a>
@@ -118,11 +119,11 @@ function Field({ id, label, error, as: Tag = "input", ...props }) {
 // A row of Bootstrap toggle buttons that works like radio buttons.
 function Choice({ name, options, value, onChange }) {
   return (
-    <div className="btn-group w-100 flex-wrap" role="group" aria-label={name}>
+    <div className="btn-group w-100" role="group" aria-label={name}>
       {options.map((o) => (
         <span key={o.id} className="d-contents">
           <input type="radio" className="btn-check" name={name} id={name + o.id} checked={value === o.id} onChange={() => onChange(o.id)} />
-          <label className="btn btn-outline-primary" htmlFor={name + o.id}>{o.label}</label>
+          <label className="btn btn-outline-primary px-2" htmlFor={name + o.id}>{o.label}</label>
         </span>
       ))}
     </div>
@@ -134,14 +135,16 @@ export function SendPage() {
   const [format, setFormat] = useState("text");               // "text" or "contact"
   const [values, setValues] = useState({ ...EMPTY, text: { text: "Hello from SoundDrop!" } });
   const [mode, setMode] = useState("audible");                // "audible" or "silent"
+  const [speed, setSpeed] = useState("normal");               // "normal" or "fast"
+  const [password, setPassword] = useState("");               // empty = not locked
   const [volume, setVolume] = useState(0.7);
   const [tried, setTried] = useState(false);                  // show errors only after the first Send
 
   // A controlled form: everything below is worked out again on every keystroke.
   const v = values[format];
-  const errors = validate(format, v);
+  const errors = validate(format, v, password);
   const valid = Object.keys(errors).length === 0;
-  const bytes = byteLength(pack(format, v));
+  const bytes = sentBytes(format, v, password);               // includes the lock's extra bytes
   const err = (k) => (tried ? errors[k] : undefined);
   const set = (k) => (e) => setValues({ ...values, [format]: { ...v, [k]: e.target.value } });
 
@@ -149,7 +152,7 @@ export function SendPage() {
     e.preventDefault();                                       // stop the browser reloading the page
     if (sending) return stopSending();                        // the same button stops a message
     setTried(true);
-    if (valid) send(pack(format, v), mode, volume);
+    if (valid) send(pack(format, v), { mode, speed, volume, password });
   }
 
   return (
@@ -173,8 +176,8 @@ export function SendPage() {
         {/* size meter: bytes used of 120, and how long the message will take to play */}
         <div>
           <div className="d-flex justify-content-between small text-body-secondary">
-            <span className={bytes > MAX_BYTES ? "text-danger" : ""}>{bytes} of {MAX_BYTES} bytes</span>
-            <span>about {airTime(bytes).toFixed(1)} s</span>
+            <span className={bytes > MAX_BYTES ? "text-danger" : ""}>{bytes} of {MAX_BYTES} bytes{password ? " (lock included)" : ""}</span>
+            <span>about {airTime(bytes, speed).toFixed(1)} s</span>
           </div>
           <div className="progress" style={{ height: 4 }}>
             <div className={"progress-bar" + (bytes > MAX_BYTES ? " bg-danger" : "")} style={{ width: Math.min(100, (bytes / MAX_BYTES) * 100) + "%" }} />
@@ -182,18 +185,35 @@ export function SendPage() {
           {err("_size") && <div className="text-danger small mt-1">{errors._size}</div>}
         </div>
 
+        {/* mode (which tones) and speed (how long each tone lasts) side by side */}
         <div>
-          <Choice name="mode" options={Object.values(MODES)} value={mode} onChange={setMode} />
-          <div className="form-text mt-1">{mode === "silent" ? "17.5–19.2 kHz, above adult hearing. Keep phones within 1–2 m." : "1.5–4 kHz, a short chirp. Most reliable."}</div>
+          <div className="row g-2">
+            <div className="col-6"><Choice name="mode" options={Object.values(MODES)} value={mode} onChange={setMode} /></div>
+            <div className="col-6"><Choice name="speed" options={Object.values(SPEEDS)} value={speed} onChange={setSpeed} /></div>
+          </div>
+          <div className="form-text mt-1">
+            {mode === "silent" ? "17.5–19.2 kHz, above adult hearing, within 1–2 m." : "1.5–4 kHz, a short chirp, most reliable."}
+            {speed === "fast" ? " Fast: twice the speed, keep phones close." : ""}
+          </div>
         </div>
-        <div className="d-flex align-items-center gap-2">
-          <label htmlFor="volume" className="small text-nowrap">Volume {Math.round(volume * 100)}%</label>
-          <input type="range" className="form-range" id="volume" min="0.1" max="1" step="0.05" value={volume} onChange={(e) => setVolume(+e.target.value)} />
+
+        {/* optional password lock, and the volume */}
+        <div className="row g-2 align-items-start">
+          <div className="col-6">
+            <input type="password" id="password" className={"form-control form-control-sm" + (err("password") ? " is-invalid" : "")}
+              placeholder="Lock password" aria-label="Password to lock the message (optional)" autoComplete="off"
+              value={password} onChange={(e) => setPassword(e.target.value)} />
+            {err("password") && <div className="invalid-feedback">{errors.password}</div>}
+          </div>
+          <div className="col-6 d-flex align-items-center gap-2">
+            <label htmlFor="volume" className="small text-nowrap">Vol {Math.round(volume * 100)}%</label>
+            <input type="range" className="form-range" id="volume" min="0.1" max="1" step="0.05" value={volume} onChange={(e) => setVolume(+e.target.value)} />
+          </div>
         </div>
       </div></div>
 
       <button type="submit" className={"btn btn-lg w-100 " + (sending ? "btn-danger" : "btn-primary")}>
-        {sending ? "Stop sending" : "Send through sound"}
+        {sending ? "Stop sending" : password ? "Send locked message" : "Send through sound"}
       </button>
       <div className="progress" style={{ height: 4 }} aria-hidden="true">
         <div className="progress-bar" style={{ width: (sending ? sending.progress * 100 : 0) + "%" }} />
@@ -207,28 +227,84 @@ export function SendPage() {
 // Receive page
 // =====================================================================
 
-// Shows one received message according to its format.
-function MessageCard({ message: m, info }) {
+// One line about how the message arrived
+function infoLine(info) {
+  let s = MODES[info.mode].label + " mode, " + info.bytes + " bytes in " + (info.ms / 1000).toFixed(1) + " s, signal " + Math.round(info.avgSnr) + " dB";
+  if (info.fixed) s += ", " + info.fixed + (info.fixed === 1 ? " byte" : " bytes") + " repaired";
+  return s;
+}
+
+// Shows one received message according to its format, with buttons to use it.
+function MessageCard({ item }) {
+  const m = item.message;
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try { await navigator.clipboard.writeText(asText(m)); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    catch (e) { /* clipboard blocked: the text can still be selected by hand */ }
+  }
+  function saveContact() {                     // a .vcf file opens in the phone's Contacts app
+    const url = URL.createObjectURL(new Blob([toVCard(m)], { type: "text/vcard" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = (m.name.replace(/[^\w ]+/g, "").trim() || "contact") + ".vcf";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  const share = () => navigator.share({ title: "SoundDrop", text: asText(m) }).catch(() => {});
+
   return (
     <div>
       <span className="badge text-bg-success mb-1">Received: {formatLabel(m.format)}</span>
+      {item.info.locked && <span className="badge text-bg-secondary mb-1 ms-1">Unlocked</span>}
       {m.format === "text" && <p className="fs-5 mb-1 text-break">{m.text}</p>}
       {m.format === "contact" && (
         <dl className="row mb-1 small">
-          <dt className="col-4">Name</dt><dd className="col-8">{m.name}</dd>
-          <dt className="col-4">Phone</dt><dd className="col-8">{m.phone}</dd>
-          {m.email && <><dt className="col-4">Email</dt><dd className="col-8 text-break">{m.email}</dd></>}
+          <dt className="col-4">Name</dt><dd className="col-8 mb-0">{m.name}</dd>
+          <dt className="col-4">Phone</dt><dd className="col-8 mb-0">{m.phone}</dd>
+          {m.email && <><dt className="col-4">Email</dt><dd className="col-8 mb-0 text-break">{m.email}</dd></>}
         </dl>
       )}
-      <div className="small text-body-secondary">
-        {MODES[info.mode].label} mode, {info.bytes} bytes in {(info.ms / 1000).toFixed(1)} s, signal {Math.round(info.avgSnr)} dB
+      <div className="small text-body-secondary">{infoLine(item.info)}</div>
+      <div className="d-flex gap-2 mt-1">
+        <button type="button" className="btn btn-sm btn-outline-primary py-0" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+        {m.format === "contact" && <button type="button" className="btn btn-sm btn-outline-primary py-0" onClick={saveContact}>Save contact</button>}
+        {navigator.share && <button type="button" className="btn btn-sm btn-outline-primary py-0" onClick={share}>Share</button>}
       </div>
     </div>
   );
 }
 
+// A locked message: the receiver types the sender's password to open it.
+function LockedCard({ item }) {
+  const { openLocked } = useSoundDrop();
+  const [password, setPassword] = useState("");
+  const [wrong, setWrong] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setBusy(true);
+    const ok = await openLocked(item.id, password);
+    setBusy(false); setWrong(!ok);
+  }
+  return (
+    <form onSubmit={onSubmit}>
+      <span className="badge text-bg-warning mb-1">Locked message</span>
+      <p className="small mb-1">Enter the sender’s password to open it.</p>
+      <div className="input-group input-group-sm">
+        <input type="password" className={"form-control" + (wrong ? " is-invalid" : "")} aria-label="Password" autoComplete="off"
+          value={password} onChange={(e) => { setPassword(e.target.value); setWrong(false); }} />
+        <button type="submit" className="btn btn-primary" disabled={!password || busy}>{busy ? "Opening…" : "Open"}</button>
+      </div>
+      {wrong && <div className="text-danger small mt-1">Wrong password. Try again.</div>}
+      <div className="small text-body-secondary mt-1">{infoLine(item.info)}</div>
+    </form>
+  );
+}
+
 export function ReceivePage() {
-  const { listening, startListening, stopListening, status, rxMode, tones, signal, result, micError, inbox, clearInbox } = useSoundDrop();
+  const { listening, startListening, stopListening, status, rxMode, tones, signal, result, micError, inbox, show, clearInbox } = useSoundDrop();
+  const shown = result && result.ok === true ? inbox.find((it) => it.id === result.id) : null;
   const statusText = !listening ? "Tap Listen to start."
     : status === "receiving" ? "Receiving " + MODES[rxMode].label + " message…"
     : "Listening (Audible and Silent)…";
@@ -249,27 +325,28 @@ export function ReceivePage() {
 
       {/* result: nothing yet, receiving, received, or failed */}
       <div className="card" aria-live="polite"><div className="card-body p-3">
-        {!result && <p className="text-body-secondary mb-0">No message yet. Press Send on the other phone.</p>}
+        {(!result || (result.ok === true && !shown)) && <p className="text-body-secondary mb-0">No message yet. Press Send on the other phone.</p>}
         {result && result.ok === null && <p className="mb-0">Receiving… {tones} tones so far</p>}
-        {result && result.ok === true && <MessageCard message={result.message} info={result.info} />}
+        {shown && (shown.locked ? <LockedCard key={shown.id} item={shown} /> : <MessageCard key={shown.id} item={shown} />)}
         {result && result.ok === false && <p className="text-danger mb-0"><strong>Message not received.</strong> {result.error} Try again, a little closer or louder.</p>}
       </div></div>
 
-      {/* inbox: every message received in this session, newest first; scrolls inside its card */}
+      {/* inbox: saved on this device, newest first; tap one to show it above; scrolls inside its card */}
       <div className="card"><div className="card-body p-3">
         <div className="d-flex justify-content-between align-items-center">
           <h2 className="h6 mb-0">Inbox ({inbox.length})</h2>
           {inbox.length > 0 && <button type="button" className="btn btn-sm btn-outline-secondary py-0" onClick={clearInbox}>Clear</button>}
         </div>
-        {inbox.length === 0 && <p className="text-body-secondary small mt-1 mb-0">Received messages are listed here.</p>}
-        <ul className="list-group list-group-flush sd-inbox">
-          {inbox.map((m) => (
-            <li key={m.id} className="list-group-item px-0 py-1 small d-flex justify-content-between gap-2">
-              <span className="text-break">{summary(m.message)}</span>
-              <span className="text-body-secondary text-nowrap">{MODES[m.info.mode].label}, {m.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-            </li>
+        {inbox.length === 0 && <p className="text-body-secondary small mt-1 mb-0">Received messages are saved here.</p>}
+        <div className="list-group list-group-flush sd-inbox">
+          {inbox.map((it) => (
+            <button type="button" key={it.id} onClick={() => show(it.id)}
+              className={"list-group-item list-group-item-action px-0 py-1 small d-flex justify-content-between gap-2" + (shown && shown.id === it.id ? " active-item" : "")}>
+              <span className="text-break text-start">{it.locked ? "Locked message" : summary(it.message)}</span>
+              <span className="text-body-secondary text-nowrap">{MODES[it.info.mode].label}, {new Date(it.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+            </button>
           ))}
-        </ul>
+        </div>
       </div></div>
     </div>
   );

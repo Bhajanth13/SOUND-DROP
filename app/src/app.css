@@ -24,6 +24,7 @@
 /* the big round Listen button */
 .sd-listen { width: 110px; height: 110px; border-radius: 50%; font-size: 1.3rem; font-weight: 600; }
 .sd-inbox { max-height: 120px; overflow-y: auto; }   /* the inbox scrolls inside its card, not the page */
+.sd-inbox .active-item { font-weight: 600; }          /* the message shown in the card above */
 .form-range::-webkit-slider-thumb { background: var(--bs-primary); }
 .form-range::-moz-range-thumb { background: var(--bs-primary); }
 
